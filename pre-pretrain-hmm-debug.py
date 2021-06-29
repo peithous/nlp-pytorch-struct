@@ -30,7 +30,7 @@ WORD = data.Field()
 POS = data.Field(include_lengths=True) # init_token='<bos>'
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-train = ConllXDataset('unk.conllu', fields)
+train = ConllXDataset('test.conllu', fields)
 
 WORD.build_vocab(train)
 POS.build_vocab(train)
