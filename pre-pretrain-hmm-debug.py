@@ -70,7 +70,6 @@ class Model():
             elif x in self.emssn_prms:
                 self.emssn_prms[x] += 1
 
-
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
@@ -124,7 +123,8 @@ def trn(train_iter, model):
         observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
 
         #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
-        #print(label[:, 0])
+        print('train')
+        print(label[:, 0])
         # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
@@ -133,6 +133,12 @@ def trn(train_iter, model):
         #print(4, dist.argmax[0].sum(-1))
         #print(dist.marginals.shape)
         # print(dist.marginals[0])
+
+        #print(dist.marginals.shape)
+        print(dist.marginals[0].sum(-1))
+        
+        #print(dist.argmax.shape) # b x (N-1) x C x C 
+        print(dist.argmax[0].sum(-1))
 
         # test <pad> marginals
         for b in range(label.shape[1]):
@@ -152,15 +158,16 @@ def trn(train_iter, model):
         observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
 
     #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
-        print(label[:, 0])
+        print('test', label[:, 0])
     # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
-        #print(dist.argmax.shape) # b x (N-1) x C x C 
         #print(3, dist.argmax[0])
         #print(4, dist.argmax[0].sum(-1))
         #print(dist.marginals.shape)
         print(dist.marginals[0].sum(-1))
+        
+        #print(dist.argmax.shape) # b x (N-1) x C x C 
         print(dist.argmax[0].sum(-1))
 
         # show_chain(dist.argmax[0])
