@@ -25,19 +25,22 @@ class ConllXDataset(data.Dataset):
             examples.append(data.Example.fromlist(columns, fields))
         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
 
-#to do: add test
 WORD = data.Field()
 POS = data.Field(include_lengths=True) # init_token='<bos>'
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-train = ConllXDataset('test.conllu', fields)
+train = ConllXDataset('unk.conllu', fields)
+test = ConllXDataset('test.conllu', fields)
 
 WORD.build_vocab(train)
 POS.build_vocab(train)
 print(WORD.vocab.stoi)
 print(POS.vocab.stoi)
 
+#to do: add test frlz
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
+test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
+
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
@@ -67,6 +70,7 @@ class Model():
             elif x in self.emssn_prms:
                 self.emssn_prms[x] += 1
 
+
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
@@ -84,7 +88,7 @@ def trn(train_iter, model):
             model.update_b(label[:, b], words[:, b], lengths[b])
     # print(model.trnsn_prms)
     # print([(POS.vocab.itos[x[0]], POS.vocab.itos[x[1]], model.trnsn_prms[x]) for x in model.trnsn_prms])
-    print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
+    #print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
 
     transition = torch.zeros((C, C)) 
     for x in model.trnsn_prms:
@@ -95,7 +99,7 @@ def trn(train_iter, model):
             transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
     #print(transition.shape, '\n', transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
-    #print(transition)
+    print(transition)
 
     init = torch.zeros(C)
     for x in range(C):
@@ -107,40 +111,59 @@ def trn(train_iter, model):
     emission = torch.zeros((C, V)) 
     for x in model.emssn_prms:  
         emission[x[0], x[1]] = model.emssn_prms[x]
-    print(emission)
+    #print(emission)
     for row in range(emission.shape[0]):
         if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1; cf. J. Eisenstein p. 148
             emission[row, :] = Categorical(emission[row, :]).probs
     #print(emission)
     emission = emission.transpose(0,1) # p(x_n| z_n)
-    print(emission)
+    #print(emission)
 
     for ex in train_iter:
         label, lengths = ex.pos
         observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
 
         #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
-        print(label[:, 0])
+        #print(label[:, 0])
         # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
 
-        out = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
-        #print(out.argmax.shape) # b x (N-1) x C x C 
-        #print(3, out.argmax[0])
-        #print(4, out.argmax[0].sum(-1))
-        #print(out.marginals.shape)
-        # print(out.marginals[0])
+        dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
+        #print(dist.argmax.shape) # b x (N-1) x C x C 
+        #print(3, dist.argmax[0])
+        #print(4, dist.argmax[0].sum(-1))
+        #print(dist.marginals.shape)
+        # print(dist.marginals[0])
 
         # test <pad> marginals
         for b in range(label.shape[1]):
             for tag in range(label.shape[0]):
                 if label[tag, b].item() == 1: # ie POS.vocab.itos == '<pad>'
-                    # print(out.marginals[b].shape)
-                    # print(out.marginals[b])
-                    # print(out.marginals[b].sum(-1).shape)
-                    #print(out.marginals[b].sum(-1)[tag-1])
-                    assert out.marginals[b].sum(-1)[tag-1].sum() == 0
+                    # print(dist.marginals[b].shape)
+                    # print(dist.marginals[b])
+                    # print(dist.marginals[b].sum(-1).shape)
+                    #print(dist.marginals[b].sum(-1)[tag-1])
+                    assert dist.marginals[b].sum(-1)[tag-1].sum() == 0
 
-        show_chain(out.argmax[0])
-        plt.show()
+        # show_chain(dist.argmax[0])
+        # plt.show()
+    
+    for ex in test_iter:
+        label, lengths = ex.pos
+        observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
+
+    #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
+        print(label[:, 0])
+    # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
+
+        dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
+        #print(dist.argmax.shape) # b x (N-1) x C x C 
+        #print(3, dist.argmax[0])
+        #print(4, dist.argmax[0].sum(-1))
+        #print(dist.marginals.shape)
+        print(dist.marginals[0].sum(-1))
+        print(dist.argmax[0].sum(-1))
+
+        # show_chain(dist.argmax[0])
+        # plt.show()       
 
 trn(train_iter, model)
