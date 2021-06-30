@@ -29,7 +29,8 @@ WORD = data.Field()
 POS = data.Field(include_lengths=True) # init_token='<bos>'
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-train = ConllXDataset('unk.conllu', fields)
+train = ConllXDataset('samIam.conllu', fields)
+train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
 test = ConllXDataset('test.conllu', fields)
 
 WORD.build_vocab(train)
@@ -37,10 +38,12 @@ POS.build_vocab(train)
 print(WORD.vocab.stoi)
 print(POS.vocab.stoi)
 
-#to do: add test frlz
+#to do: model state, embeddings, life
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
-test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
 
+train_iter_DATA = BucketIterator(train_DATA, batch_size=2, device='cpu', shuffle=False)
+
+test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
@@ -73,7 +76,7 @@ class Model():
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
-model = Model()
+model1 = Model()
 def trn(train_iter, model):
     for ex in train_iter:
         words = ex.word
@@ -109,7 +112,7 @@ def trn(train_iter, model):
    
     emission = torch.zeros((C, V)) 
     for x in model.emssn_prms:  
-        emission[x[0], x[1]] = model.emssn_prms[x]
+        emission[x[0], x[1]] = model1.emssn_prms[x]
     #print(emission)
     for row in range(emission.shape[0]):
         if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1; cf. J. Eisenstein p. 148
@@ -123,9 +126,9 @@ def trn(train_iter, model):
         observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
 
         #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
-        print('train')
-        print(label[:, 0])
-        # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
+        # print('train')
+        # print(label[:, 0])
+        # # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
         #print(dist.argmax.shape) # b x (N-1) x C x C 
@@ -134,11 +137,11 @@ def trn(train_iter, model):
         #print(dist.marginals.shape)
         # print(dist.marginals[0])
 
-        #print(dist.marginals.shape)
-        print(dist.marginals[0].sum(-1))
+        # #print(dist.marginals.shape)
+        # print(dist.marginals[0].sum(-1))
         
-        #print(dist.argmax.shape) # b x (N-1) x C x C 
-        print(dist.argmax[0].sum(-1))
+        # #print(dist.argmax.shape) # b x (N-1) x C x C 
+        # print(dist.argmax[0].sum(-1))
 
         # test <pad> marginals
         for b in range(label.shape[1]):
@@ -173,4 +176,7 @@ def trn(train_iter, model):
         # show_chain(dist.argmax[0])
         # plt.show()       
 
-trn(train_iter, model)
+trn(train_iter, model1)
+
+model_z = Model()
+trn(train_iter_DATA, model_z)
