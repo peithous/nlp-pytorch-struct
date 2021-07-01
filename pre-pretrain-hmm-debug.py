@@ -88,7 +88,7 @@ def trn(train_iter, model):
             model.update_b(label[:, b], words[:, b], lengths[b])
     # print(model.trnsn_prms)
     # print([(POS.vocab.itos[x[0]], POS.vocab.itos[x[1]], model.trnsn_prms[x]) for x in model.trnsn_prms])
-    #print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
+    # print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
 
     transition = torch.zeros((C, C)) 
     for x in model.trnsn_prms:
@@ -113,7 +113,7 @@ def trn(train_iter, model):
         emission[x[0], x[1]] = model.emssn_prms[x]
     #print(emission)
     for row in range(emission.shape[0]):
-        if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1 (Eisenstein: 148)
+        if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
             emission[row, :] = Categorical(emission[row, :]).probs
     #print(emission)
     emission = emission.transpose(0,1) # p(x_n| z_n)
@@ -123,32 +123,13 @@ def trn(train_iter, model):
         label, lengths = ex.pos
         observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
 
-        #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
-        # print('train')
-        # print(label[:, 0])
-        # # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
-
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
         #print(dist.argmax.shape) # b x (N-1) x C x C 
-        #print(3, dist.argmax[0])
-        #print(4, dist.argmax[0].sum(-1))
-        #print(dist.marginals.shape)
-        # print(dist.marginals[0])
-
-        # #print(dist.marginals.shape)
-        # print(dist.marginals[0].sum(-1))
         
-        # #print(dist.argmax.shape) # b x (N-1) x C x C 
-        # print(dist.argmax[0].sum(-1))
-
 # test <pad> marginals
         for b in range(label.shape[1]):
             for tag in range(label.shape[0]):
                 if label[tag, b].item() == 1: # ie POS.vocab.itos == '<pad>'
-                    # print(dist.marginals[b].shape)
-                    # print(dist.marginals[b])
-                    # print(dist.marginals[b].sum(-1).shape)
-                    #print(dist.marginals[b].sum(-1)[tag-1])
                     assert dist.marginals[b].sum(-1)[tag-1].sum() == 0
 
         # show_chain(dist.argmax[0])
@@ -158,22 +139,18 @@ def trn(train_iter, model):
         label, lengths = ex.pos
         observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
 
-        #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
         print('test', label[:, 0])
-        # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
-        #print(3, dist.argmax[0])
-        #print(4, dist.argmax[0].sum(-1))
-        #print(dist.marginals.shape)
-        print(dist.marginals[0].sum(-1))
-        
-        #print(dist.argmax.shape) # b x (N-1) x C x C 
+
+        #print(dist.log_potentials[0].sum(-1))        
+
+        print(dist.marginals[0].sum(-1))        
         print(dist.argmax[0].sum(-1))
 
         # show_chain(dist.argmax[0])
         # plt.show()
-               
+
 model = Model()
 trn(train_iter, model)
 

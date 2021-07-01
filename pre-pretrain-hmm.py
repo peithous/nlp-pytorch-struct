@@ -90,7 +90,7 @@ def trn(train_iter, model):
     for x in model.emssn_prms:  
         emission[x[0], x[1]] = model.emssn_prms[x]
     for row in range(emission.shape[0]):
-        if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1; cf. (Eisenstein: 148)
+        if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
             emission[row, :] = Categorical(emission[row, :]).logits
     emission = emission.transpose(0,1) # p(x_n| z_n)
 
