@@ -1,6 +1,6 @@
 # newdoc id = sam
 # sent_id = 1
-# text = Sam I <unk>.
+# text = Sam I was.
 # remove/fix deps
 1	Sam	Sam	PROPN	-	-	3	-	_	_
 2	I	I	PRON	-	_	3	-	_	_

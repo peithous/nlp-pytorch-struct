@@ -96,7 +96,7 @@ def trn(train_iter, model):
     #print(transition)
     for row in range(transition.shape[0]):
         if row!=POS.vocab.stoi['<pad>'] and row!=POS.vocab.stoi['PUNCT']: # avoid nan's ie keep 0-probs at p(z_n | z_n-1 = pad/punct) 
-            transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
+            transition[row, :] = Categorical(transition[row, :]).logits # normalize counts
     #print(transition.shape, '\n', transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
     #print(transition)
@@ -105,7 +105,7 @@ def trn(train_iter, model):
     for x in range(C):
         init[x] = POS.vocab.freqs[POS.vocab.itos[x]]
     #print(init)
-    init = Categorical(init).probs
+    init = Categorical(init).logits
     #print(init)
    
     emission = torch.zeros((C, V)) 
@@ -114,14 +114,14 @@ def trn(train_iter, model):
     #print(emission)
     for row in range(emission.shape[0]):
         if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
-            emission[row, :] = Categorical(emission[row, :]).probs
+            emission[row, :] = Categorical(emission[row, :]).logits
     #print(emission)
     emission = emission.transpose(0,1) # p(x_n| z_n)
     #print(emission)
 
     for ex in train_iter:
         label, lengths = ex.pos
-        observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
+        observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
         #print(dist.argmax.shape) # b x (N-1) x C x C 
@@ -137,9 +137,11 @@ def trn(train_iter, model):
     
     for ex in test_iter:
         label, lengths = ex.pos
-        observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
+        #print(label.shape)
+        observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
 
-        print('test', label[:, 0])
+        print('words', observations[0])
+        print('label', label.transpose(0, 1)[0])
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
 
