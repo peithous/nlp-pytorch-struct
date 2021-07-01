@@ -96,16 +96,16 @@ def trn(train_iter, model):
     #print(transition)
     for row in range(transition.shape[0]):
         if row!=POS.vocab.stoi['<pad>'] and row!=POS.vocab.stoi['PUNCT']: # avoid nan's ie keep 0-probs at p(z_n | z_n-1 = pad/punct) 
-            transition[row, :] = Categorical(transition[row, :]).logits # normalize counts
+            transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
     #print(transition.shape, '\n', transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
-    #print(transition)
+    print('transition', transition)
 
     init = torch.zeros(C)
     for x in range(C):
         init[x] = POS.vocab.freqs[POS.vocab.itos[x]]
     #print(init)
-    init = Categorical(init).logits
+    init = Categorical(init).probs
     #print(init)
    
     emission = torch.zeros((C, V)) 
@@ -114,27 +114,34 @@ def trn(train_iter, model):
     #print(emission)
     for row in range(emission.shape[0]):
         if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
-            emission[row, :] = Categorical(emission[row, :]).logits
+            emission[row, :] = Categorical(emission[row, :]).probs
     #print(emission)
     emission = emission.transpose(0,1) # p(x_n| z_n)
     #print(emission)
+
+    # pad states are being assigned prob mass
 
     for ex in train_iter:
         label, lengths = ex.pos
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
 
-        dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
+        dist = HMM(transition, emission, init, observations, lengths=lengths) # in: CxC, VxC, C, bxN 
+        print('train')
+
+        print('label', label.transpose(0, 1)[0])
+
+        print('marginals', dist.marginals[0].sum(-1))
+        print('argmax', dist.argmax[0].sum(-1))
         #print(dist.argmax.shape) # b x (N-1) x C x C 
         
-# test <pad> marginals
-        for b in range(label.shape[1]):
-            for tag in range(label.shape[0]):
-                if label[tag, b].item() == 1: # ie POS.vocab.itos == '<pad>'
-                    assert dist.marginals[b].sum(-1)[tag-1].sum() == 0
+# # test <pad> marginals
+#         for b in range(label.shape[1]):
+#             for tag in range(label.shape[0]):
+#                 if label[tag, b].item() == 1: # ie POS.vocab.itos == '<pad>'
+#                     # print(tag, label.transpose(0, 1))
+#                     # print('dms', dist.marginals[b].sum(-1))
+#                     assert dist.marginals[b].sum(-1)[tag-1].sum() == 0
 
-        # show_chain(dist.argmax[0])
-        # plt.show()
-    
     for ex in test_iter:
         label, lengths = ex.pos
         #print(label.shape)
@@ -143,12 +150,16 @@ def trn(train_iter, model):
         print('words', observations[0])
         print('label', label.transpose(0, 1)[0])
 
+
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
 
         #print(dist.log_potentials[0].sum(-1))        
 
-        print(dist.marginals[0].sum(-1))        
-        print(dist.argmax[0].sum(-1))
+        print(dist.log_potentials[0].sum(-1))   
+
+        print(dist.marginals[0].sum(-1))   
+        
+        print(dist.argmax[0].sum(-1))        
 
         # show_chain(dist.argmax[0])
         # plt.show()
