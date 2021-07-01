@@ -40,7 +40,6 @@ print(POS.vocab.stoi)
 
 #to do: model state, embeddings, life
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
-
 train_iter_DATA = BucketIterator(train_DATA, batch_size=2, device='cpu', shuffle=False)
 
 test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
@@ -76,7 +75,6 @@ class Model():
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
-model1 = Model()
 def trn(train_iter, model):
     for ex in train_iter:
         words = ex.word
@@ -101,7 +99,7 @@ def trn(train_iter, model):
             transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
     #print(transition.shape, '\n', transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
-    print(transition)
+    #print(transition)
 
     init = torch.zeros(C)
     for x in range(C):
@@ -112,10 +110,10 @@ def trn(train_iter, model):
    
     emission = torch.zeros((C, V)) 
     for x in model.emssn_prms:  
-        emission[x[0], x[1]] = model1.emssn_prms[x]
+        emission[x[0], x[1]] = model.emssn_prms[x]
     #print(emission)
     for row in range(emission.shape[0]):
-        if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1; cf. J. Eisenstein p. 148
+        if row!=WORD.vocab.stoi['<pad>']: # 0-prob at p(w_i | z_i = pad); don't omit p(w_i | PUNCT) since p(w_i = ·|PUNCT) = 1 (Eisenstein: 148)
             emission[row, :] = Categorical(emission[row, :]).probs
     #print(emission)
     emission = emission.transpose(0,1) # p(x_n| z_n)
@@ -143,7 +141,7 @@ def trn(train_iter, model):
         # #print(dist.argmax.shape) # b x (N-1) x C x C 
         # print(dist.argmax[0].sum(-1))
 
-        # test <pad> marginals
+# test <pad> marginals
         for b in range(label.shape[1]):
             for tag in range(label.shape[0]):
                 if label[tag, b].item() == 1: # ie POS.vocab.itos == '<pad>'
@@ -160,9 +158,9 @@ def trn(train_iter, model):
         label, lengths = ex.pos
         observations = torch.transpose(torch.LongTensor(ex.word), 0, 1).contiguous()
 
-    #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
+        #print(' '.join([WORD.vocab.itos[i] for i in words[:, 0]]))
         print('test', label[:, 0])
-    # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
+        # print(' '.join([POS.vocab.itos[i] for i in label[:, 0]]))
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
         #print(3, dist.argmax[0])
@@ -174,9 +172,12 @@ def trn(train_iter, model):
         print(dist.argmax[0].sum(-1))
 
         # show_chain(dist.argmax[0])
-        # plt.show()       
+        # plt.show()
+               
+model = Model()
+trn(train_iter, model)
 
-trn(train_iter, model1)
+print('data copies')
 
-model_z = Model()
-trn(train_iter_DATA, model_z)
+model1 = Model()
+trn(train_iter_DATA, model1)
