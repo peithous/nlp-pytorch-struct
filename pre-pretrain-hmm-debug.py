@@ -142,13 +142,10 @@ def trn(train_iter, model):
         print('words', observations[0])
         print('label', label.transpose(0, 1)[0])
 
-
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
-
         #print(dist.log_potentials[0].sum(-1))   
 
-        print(dist.marginals[0].sum(-1))   
-        
+        print(dist.marginals[0].sum(-1))     
         print(dist.argmax[0].sum(-1))        
 
         # show_chain(dist.argmax[0])
