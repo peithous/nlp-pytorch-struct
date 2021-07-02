@@ -159,12 +159,13 @@ trn(train_iter, model)
 # UNK PUNCT is observed once; p(w=unk| UNK) = 1
 # probs/logits: p('was'| UNK/AUX) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
 # probs: max p(z| unk unk unk unk.) = UNK UNK UNK PUNCT
-# logits: max p(z| unk unk unk.) = UNK PUNCT UNK PUNCT
+# logits: max p(z| unk unk unk unk.) = UNK PUNCT UNK PUNCT
 
 print('data copies') # ie repeat PRON AUX PUNCT
 model1 = Model()
 trn(train_iter_DATA, model1)
 # UNK PUNCT is observed twice; p(w=unk| UNK) = 1
-# probs/logits: p('was'| UNK) = 0.3, p('was'| AUX) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
+# probs: p('was'| UNK) = 0.3, p('was'| AUX) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
+# logits: p('was'| UNK) = 0.3, p('was'| AUX) = 0 -> max p(z| Sam I was.) = PRON UNK PUNCT
 # probs: p(z| unk unk unk unk.) =  UNK PRON AUX PUNCT 
-# logits: max p(z| unk unk unk.) = UNK PUNCT UNK PUNCT
+# logits: max p(z| unk unk unk unk.) = UNK PUNCT UNK PUNCT
