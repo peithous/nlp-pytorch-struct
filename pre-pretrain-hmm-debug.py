@@ -156,14 +156,15 @@ def trn(train_iter, model):
 
 model = Model()
 trn(train_iter, model)
-# probs/logits: p('was' | unk) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
-# probs: max p(z | unk unk unk unk.) = UNK UNK UNK PUNCT
+# UNK PUNCT is observed once; p(w=unk| UNK) = 1
+# probs/logits: p('was'| UNK/AUX) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
+# probs: max p(z| unk unk unk unk.) = UNK UNK UNK PUNCT
 # logits: max p(z| unk unk unk.) = UNK PUNCT UNK PUNCT
 
-# UNK PUNCT is observed once in both train sets
 print('data copies') # ie repeat PRON AUX PUNCT
 model1 = Model()
 trn(train_iter_DATA, model1)
-# probs/logits: p('was' | unk) = 0.3 -> max p(z| Sam I was.) = = PRON AUX PUNCT
-# probs: p(z | unk unk unk unk.) =  UNK PRON AUX PUNCT 
+# UNK PUNCT is observed twice; p(w=unk| UNK) = 1
+# probs/logits: p('was'| UNK) = 0.3, p('was'| AUX) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
+# probs: p(z| unk unk unk unk.) =  UNK PRON AUX PUNCT 
 # logits: max p(z| unk unk unk.) = UNK PUNCT UNK PUNCT
