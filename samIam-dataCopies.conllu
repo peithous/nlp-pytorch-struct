@@ -9,7 +9,7 @@
 # text = Sam I am.
 1	Sam	Sam	PROPN	-	-	3	-	_	_
 2	I	I	PRON	-	_	3	-	_	_
-3	am	be	AUX	-	_	0	-	_	SpaceAfter=No
+3	was	be	<unk>	-	_	0	-	_	SpaceAfter=No
 4	·	·	PUNCT	-	_	3	-	_	_
 
 # text = Sam I am.
