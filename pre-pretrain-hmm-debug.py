@@ -25,20 +25,22 @@ class ConllXDataset(data.Dataset):
             examples.append(data.Example.fromlist(columns, fields))
         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
 
-WORD = data.Field(pad_token=None)
-POS = data.Field(include_lengths=True, pad_token=None) # init_token='<bos>'
+WORD = data.Field(pad_token=None) # instead of pad: length masking for param estim 
+POS = data.Field(include_lengths=True, pad_token=None) # if included in class vocab, p (z_t = pad| z_t-1) > 0; init params instead of <bos> init_tok
 fields = (('word', WORD), ('pos', POS), (None, None))
 
 train = ConllXDataset('samIam.conllu', fields)
 train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
 test = ConllXDataset('test.conllu', fields)
 
-WORD.build_vocab(train_DATA) # include 'was' in vocab with <unk> as it's POS
-POS.build_vocab(train_DATA)
-print(WORD.vocab.stoi)
+WORD.build_vocab(train_DATA) # include 'was' in vocab with <unk> as its POS
+POS.build_vocab(train_DATA) 
 print(POS.vocab.stoi)
 
-#to do: store parameters in model class, embeddings
+# to do: store parameter matrices in model class, pre-trained/trainable embeddings
+# add learnable coefs for supervised/EM models: 
+    # https://homes.cs.washington.edu/~nasmith/slides/LXMLS-6-16-18.pdf
+    # https://www.cs.cmu.edu/~nasmith/papers/smith.tut04a.pdf 
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 train_iter_DATA = BucketIterator(train_DATA, batch_size=2, device='cpu', shuffle=False)
 
@@ -134,13 +136,13 @@ def trn(train_iter, model):
         show_chain(dist.argmax[0])
         plt.show()
 
-    for ex in test_iter:
+    for i, ex in enumerate(test_iter):
         label, lengths = ex.pos
         #print(label.shape)
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
 
         #print('words', observations[0])
-        print('label test', ex, label.transpose(0, 1)[0])
+        print('label test', i, label.transpose(0, 1)[0])
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
         #print(dist.log_potentials[0].sum(-1))   

@@ -29,15 +29,23 @@ class ConllXDataset(data.Dataset):
         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
 
 #to do: add bos
-WORD = data.Field() # init_token='<bos>', eos_token='<eos>'
-POS = data.Field(is_target=True)
+# WORD = data.Field() # init_token='<bos>', eos_token='<eos>'
+# POS = data.Field(is_target=True)
+
+WORD = data.Field(pad_token=None) # 
+POS = data.Field( pad_token=None) # include_lengths=True,
+# if included in class vocab, p (z_t = pad| z_t-1) > 0; init params instead of <bos> init_tok
+#fields = (('word', WORD), ('pos', POS), (None, None))
 fields = (('word', WORD), ('pos', POS))
 
-train = ConllXDataset('sam.conllu', fields)
 
-WORD.build_vocab(train)
-POS.build_vocab(train)
-#print(vars(POS.vocab))
+train = ConllXDataset('samIam.conllu', fields)
+train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
+test = ConllXDataset('test.conllu', fields)
+
+WORD.build_vocab(train) # include 'was' in vocab with <unk> as its POS
+POS.build_vocab(train_DATA) 
+print(POS.vocab.stoi)
 
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 
@@ -97,5 +105,6 @@ def trn(train_iter):
         print(sum(losses))
             
             # losses.append(loss.detach())
+
 
 trn(train_iter)
