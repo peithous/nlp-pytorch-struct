@@ -125,22 +125,22 @@ def trn(train_iter, model):
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
         # print('train')
 
-        # print('label', label.transpose(0, 1)[0])
+        print('label train', label.transpose(0, 1)[0])
 
         # print('marginals', dist.marginals[0].sum(-1))
         # print('argmax', dist.argmax[0].sum(-1))
         # print(dist.argmax.shape) # 
         
-        # show_chain(dist.argmax[0])
-        # plt.show()
+        show_chain(dist.argmax[0])
+        plt.show()
 
     for ex in test_iter:
         label, lengths = ex.pos
         #print(label.shape)
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
 
-        print('words', observations[0])
-        print('label', label.transpose(0, 1)[0])
+        #print('words', observations[0])
+        print('label test', ex, label.transpose(0, 1)[0])
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
         #print(dist.log_potentials[0].sum(-1))   
@@ -148,8 +148,8 @@ def trn(train_iter, model):
         print(dist.marginals[0].sum(-1))     
         print(dist.argmax[0].sum(-1))        
 
-        # show_chain(dist.argmax[0])
-        # plt.show()
+        show_chain(dist.argmax[0])
+        plt.show()
 
 model = Model()
 trn(train_iter, model)
