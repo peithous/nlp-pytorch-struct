@@ -38,7 +38,7 @@ POS.build_vocab(train_DATA)
 print(WORD.vocab.stoi)
 print(POS.vocab.stoi)
 
-#to do: model state, embeddings, life
+#to do: store parameters in model class, embeddings
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 train_iter_DATA = BucketIterator(train_DATA, batch_size=2, device='cpu', shuffle=False)
 
@@ -95,7 +95,7 @@ def trn(train_iter, model):
         transition[x[0], x[1]] = model.trnsn_prms[x] # populate with counts: (pos_n-1, pos_n)
     #print(transition)
     for row in range(transition.shape[0]):
-        if row!=POS.vocab.stoi['PUNCT']: # row!=POS.vocab.stoi['<pad>'] and avoid nan's ie keep 0-probs at p(z_n | z_n-1 = pad/punct) 
+        if row!=POS.vocab.stoi['PUNCT']: # 0-probs at p(z_n | z_n-1 = punct) 
             transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
     #print(transition.shape, '\n', transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
@@ -118,21 +118,21 @@ def trn(train_iter, model):
     emission = emission.transpose(0,1) # p(x_n| z_n)
     print('emission', '\n', emission)
 
-    # pad states are being assigned prob mass
-
     for ex in train_iter:
         label, lengths = ex.pos
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
 
-        dist = HMM(transition, emission, init, observations, lengths=lengths) # in: CxC, VxC, C, bxN 
+        dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
         # print('train')
 
         # print('label', label.transpose(0, 1)[0])
 
         # print('marginals', dist.marginals[0].sum(-1))
         # print('argmax', dist.argmax[0].sum(-1))
-        # print(dist.argmax.shape) # b x (N-1) x C x C 
+        # print(dist.argmax.shape) # 
         
+        # show_chain(dist.argmax[0])
+        # plt.show()
 
     for ex in test_iter:
         label, lengths = ex.pos
