@@ -39,7 +39,7 @@ print(POS.vocab.stoi)
 
 # to do: store parameter matrices in model class, pre-trained/trainable embeddings
 # add learnable coefs for supervised/EM models: 
-    # https://homes.cs.washington.edu/~nasmith/slides/LXMLS-6-16-18.pdf
+    #https://homes.cs.washington.edu/~nasmith/slides/LXMLS-6-16-18.pdf
     # https://www.cs.cmu.edu/~nasmith/papers/smith.tut04a.pdf 
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 train_iter_DATA = BucketIterator(train_DATA, batch_size=2, device='cpu', shuffle=False)

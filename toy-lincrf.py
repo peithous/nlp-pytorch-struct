@@ -32,12 +32,12 @@ class ConllXDataset(data.Dataset):
 # WORD = data.Field() # init_token='<bos>', eos_token='<eos>'
 # POS = data.Field(is_target=True)
 
-WORD = data.Field(pad_token=None) # 
-POS = data.Field( pad_token=None) # include_lengths=True,
-# if included in class vocab, p (z_t = pad| z_t-1) > 0; init params instead of <bos> init_tok
+WORD = data.Field(pad_token=None) # if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
+POS = data.Field(pad_token=None, include_lengths=True) #
+
+# init params instead of <bos> init_tok
 #fields = (('word', WORD), ('pos', POS), (None, None))
 fields = (('word', WORD), ('pos', POS))
-
 
 train = ConllXDataset('samIam.conllu', fields)
 train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
@@ -45,12 +45,12 @@ test = ConllXDataset('test.conllu', fields)
 
 WORD.build_vocab(train) # include 'was' in vocab with <unk> as its POS
 POS.build_vocab(train_DATA) 
-print(POS.vocab.stoi)
 
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
+print(C, V)
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
@@ -61,12 +61,26 @@ class Model(nn.Module):
         return F.log_softmax(self.linear(count_mat), dim=-1)     
 
 model = Model(V, C)
-opt = optim.SGD(model.parameters(), lr=0.001)
+opt = optim.SGD(model.parameters(), lr=0.1)
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
-#def make_count_mat(sent, poss):
+def batch_count_mat(sents, pos, length):
+    
+    count_matrix = torch.zeros(sents.shape[1], C, V) 
+
+    for b in range(pos.shape[1]):
+
+        for s in range(length[b]):
+            w = sents[s,b]
+            ps = pos[s,b]
+
+            count_matrix[b, ps, w] += 1
+    #print(count_matrix)    
+    return count_matrix
+
+
 
 def trn(train_iter):
     model.train()
@@ -76,11 +90,15 @@ def trn(train_iter):
         for batch in train_iter:
             #model.zero_grad()
             opt.zero_grad() 
+            
+            sents = batch.word
+            label, lengths = batch.pos
 
-            dims_fake = torch.ones(batch.pos.shape[1], C, V)
-            #model_in = make_count_mat(batch.word, batch.pos)
+            #dims_fake = torch.ones(label.shape[1], C, V)
+            model_in = batch_count_mat(sents, label, lengths)
 
-            probs = model(dims_fake)
+            #probs = model(dims_fake)
+            probs = model(model_in)
             #print(weights)
 
             chain = probs.unsqueeze(1).expand(-1, batch.word.shape[0]-1, -1, -1)  # batch, N, C, C 
@@ -91,7 +109,6 @@ def trn(train_iter):
             # show_chain(dist.argmax[0])
             # plt.show()
 
-            label = batch.pos
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
                             .type(torch.LongTensor), C).type(torch.FloatTensor) # b x N, C -> b x (N-1) x C x C 
             #print('l', labels.shape, labels)
