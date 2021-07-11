@@ -43,7 +43,7 @@ train = ConllXDataset('samIam.conllu', fields)
 train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
 test = ConllXDataset('test.conllu', fields)
 
-WORD.build_vocab(train) # include 'was' in vocab with <unk> as its POS
+WORD.build_vocab(train_DATA) # include 'was' in vocab with <unk> as its POS
 POS.build_vocab(train_DATA) 
 
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
@@ -51,6 +51,8 @@ train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
 print(C, V)
+print(POS.vocab.stoi)
+print(WORD.vocab.stoi)
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
@@ -61,13 +63,12 @@ class Model(nn.Module):
         return F.log_softmax(self.linear(count_mat), dim=-1)     
 
 model = Model(V, C)
-opt = optim.SGD(model.parameters(), lr=0.1)
+opt = optim.SGD(model.parameters(), lr=0.2)
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
-def batch_count_mat(sents, pos, length):
-    
+def batch_count_mat(sents, pos, length):   
     count_matrix = torch.zeros(sents.shape[1], C, V) 
 
     for b in range(pos.shape[1]):
@@ -75,31 +76,29 @@ def batch_count_mat(sents, pos, length):
         for s in range(length[b]):
             w = sents[s,b]
             ps = pos[s,b]
-
             count_matrix[b, ps, w] += 1
+
     #print(count_matrix)    
     return count_matrix
-
 
 
 def trn(train_iter):
     model.train()
     
-    for epoch in range(200):
+    for epoch in range(2):
         losses = []
-        for batch in train_iter:
+        for i, batch in enumerate(train_iter):
             #model.zero_grad()
             opt.zero_grad() 
             
             sents = batch.word
             label, lengths = batch.pos
 
-            #dims_fake = torch.ones(label.shape[1], C, V)
-            model_in = batch_count_mat(sents, label, lengths)
+            model_in = batch_count_mat(sents, label, lengths) # batch x C x V
 
-            #probs = model(dims_fake)
             probs = model(model_in)
-            #print(weights)
+            # for param in model.parameters():
+            #     print(i, param) 
 
             chain = probs.unsqueeze(1).expand(-1, batch.word.shape[0]-1, -1, -1)  # batch, N, C, C 
 
@@ -110,7 +109,7 @@ def trn(train_iter):
             # plt.show()
 
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
-                            .type(torch.LongTensor), C).type(torch.FloatTensor) # b x N, C -> b x (N-1) x C x C 
+                        .type(torch.LongTensor), C).type(torch.FloatTensor) # b x N, C -> b x (N-1) x C x C 
             #print('l', labels.shape, labels)
 
             loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
@@ -121,7 +120,7 @@ def trn(train_iter):
             losses.append(loss.detach())
         print(sum(losses))
             
-            # losses.append(loss.detach())
+
 
 
 trn(train_iter)
