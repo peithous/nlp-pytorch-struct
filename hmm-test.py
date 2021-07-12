@@ -32,7 +32,7 @@ train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
 test = ConllXDataset('test.conllu', fields)
 
 WORD.build_vocab(train_DATA) 
-POS.build_vocab(train)
+POS.build_vocab(train_DATA)
 
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
@@ -108,24 +108,30 @@ def trn(train_iter, model):
 model = Model()
 transition, emission, init = trn(train_iter, model) # weights
 
+
 def test(iters):
     losses = []
-    for i, ex in enumerate(iters):    
+    for i, ex in enumerate(iters):   
+        print(i) 
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
         label, lengths = ex.pos
+        #print(lengths)
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
-        # print('label', label.transpose(0, 1)[0])  
-        # show_chain(dist.argmax[0])  
-        # plt.show()
+        print('label', label.transpose(0, 1)[0])  
+        
+        show_chain(dist.argmax[0])  
+        plt.show()
 
         labels = HMM.struct.to_parts(label.transpose(0, 1) \
-                    .type(torch.LongTensor), C).type(torch.FloatTensor) 
+                    .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
         #print('l', labels.shape, labels)
 
         loss = dist.log_prob(labels).sum()
         losses.append(loss.detach())
-    
-    print(sum(losses))
+        #print(loss)
+    print(torch.tensor(losses).mean())
+
+    #print(losses, len(losses))
 
 test(test_iter)
