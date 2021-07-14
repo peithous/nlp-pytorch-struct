@@ -30,8 +30,6 @@ class ConllXDataset(data.Dataset):
 WORD = data.Field(pad_token=None) # if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
 POS = data.Field(pad_token=None, include_lengths=True) #
 
-# init params instead of <bos> init_tok
-#fields = (('word', WORD), ('pos', POS), (None, None))
 fields = (('word', WORD), ('pos', POS), (None, None))
 
 #train = ConllXDataset('samIam.conllu', fields)
@@ -54,10 +52,10 @@ print(WORD.vocab.stoi)
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
         super().__init__()
-        self.linear = nn.Linear(voc_size, num_pos_tags)
-
+        self.linear = nn.Linear(voc_size, num_pos_tags) # batch x C x V -> batch x C_t x C_t-1
+        
     def forward(self, count_mat):
-        return F.log_softmax(self.linear(count_mat), dim=-1)     
+        return F.log_softmax(self.linear(count_mat), dim=1) # normalize C_t given C_t-1 (cols sum to 1)    
 
 model = Model(V, C)
 opt = optim.SGD(model.parameters(), lr=0.01)
@@ -81,7 +79,7 @@ def batch_count_mat(sents, pos, length):
 
 def trn(train_iter):
     
-    for epoch in range(50):
+    for epoch in range(100):
         model.train()
 #        losses = []
         for i, batch in enumerate(train_iter):
@@ -98,16 +96,16 @@ def trn(train_iter):
 
             probs = model(model_in)
             #print(probs.shape)
-            # for param in model.parameters():
-            #     print(i, param) 
+            #for param in model.parameters():
+            #    print(i, param) 
 
             chain = probs.unsqueeze(1).expand(-1, sents.shape[0]-1, -1, -1)  # batch, N, C, C 
 
             dist = LinearChainCRF(chain) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
             #print('d', dist.marginals.shape, dist.marginals)
             #print(dist.argmax.shape) 
-            # show_chain(dist.argmax[0])
-            # plt.show()
+            #show_chain(dist.argmax[0])
+            #plt.show()
 
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
                         .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
@@ -138,17 +136,19 @@ def trn(train_iter):
 
             probs = model(model_in)
                     #print(probs.shape)
-                    # for param in model.parameters():
-                    #     print(i, param) 
+                    #for param in model.parameters():
+                    #    print(i, param) 
 
             chain = probs.unsqueeze(1).expand(-1, sents.shape[0]-1, -1, -1)  # batch, N, C, C 
 
             dist = LinearChainCRF(chain, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
+            
             #print('label', label.transpose(0, 1)[0])  
-            # show_chain(dist.argmax[0])  
+
             #print('d', dist.marginals.shape, dist.marginals)
             #print(dist.argmax.shape) 
 
+            #show_chain(dist.argmax[0])  
             #plt.show()
 
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
