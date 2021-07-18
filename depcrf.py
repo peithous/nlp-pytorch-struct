@@ -93,5 +93,4 @@ def trn(train_iter, model):
         loss = log_prob.sum()
         (-loss).backward()
 
-
 trn(train_iter, model)
