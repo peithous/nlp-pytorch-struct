@@ -7,8 +7,6 @@ import torchtext.data as data
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
-
-
 def batch_num(nums):
     lengths = torch.tensor([len(n) for n in nums]).long()
     n = lengths.max()
@@ -23,14 +21,14 @@ HEAD.is_target = True
 WORD = data.Field(pad_token=None)
 WORD.is_target = False
 
-train = torch_struct.data.ConllXDataset("temp/wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
-                     filter_pred=lambda x: 5 < len(x.word) < 40)
+train = torch_struct.data.ConllXDataset("samIam.conllu", (('word', WORD), ('head', HEAD)),
+                     ) #filter_pred=lambda x: 5 < len(x.word) < 40
 
 WORD.build_vocab(train)
 train_iter = data.BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 
-
 V = len(WORD.vocab.itos)
+
 
 class Model(nn.Module):
     def __init__(self, hidden):
@@ -45,11 +43,9 @@ class Model(nn.Module):
         
     def forward(self, words):
         #out = self.dropout(self.base_model(words)[0])
-        out = self.embedding(words) #bnh
-        #print('out', out.shape)
-        final2 = self.linear(out)
-
-        final = torch.einsum("bnh,hg,bmg->bnm", out, self.bilinear.weight, final2)
+        out = self.embedding(words) # (b x N ) -> (b x N x V)
+        final2 = self.linear(out) # (b x N x V) (V x V) -> (b x N x V)
+        final = torch.einsum("bnh,hg,bmg->bnm", out, self.bilinear.weight, final2) # (N x V) (V x V) (V x N) -> (N, N)
         #print('ein3', final.shape)
         root_score = torch.einsum("bnh,h->bn", out, self.root)
         #print('root', root_score)
@@ -65,6 +61,7 @@ def show_deps(tree):
     plt.imshow(tree.detach())
 
 def trn(train_iter, model):
+
     for i, ex in enumerate(train_iter):
         print(i)
         # print(ex.word.shape) # sq x b
@@ -77,20 +74,18 @@ def trn(train_iter, model):
         #batch, _ = label.shape
         
         final = model(words)
-        #print(final)
+        print(final)
         dist = DependencyCRF(final, lengths=lengths)
         # dist.multiroot=False
-        show_deps(dist.argmax[0])
-
         # show_deps(dist.argmax[0])
-        plt.show()
+        # plt.show()
 
         labels = dist.struct.to_parts(label, lengths=lengths).type_as(final)
         #print('labels', labels.shape)
 
-        # event = dist.to_event((labels.type(torch.LongTensor)[0]), None)
-        # show_deps(event[0])
-        # plt.show()
+        gold = DependencyCRF(labels, lengths=lengths)
+        show_deps(gold.argmax[0])
+        plt.show()
 
         log_prob = dist.log_prob(labels)
         print(log_prob.shape)
