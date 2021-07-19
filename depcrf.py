@@ -43,9 +43,9 @@ class Model(nn.Module):
     def forward(self, words):
         out = self.embedding(words) # (b x N ) -> (b x N x V)
         final2 = self.linear(out) # (b x N x V) (V x V) -> (b x N x V)
-        final = torch.einsum("bnh,hg,bmg->bnm", out, self.bilinear.weight, final2) # (N x V) (V x V) (V x N) -> (N, N)
+        final = torch.einsum("bnh,hg,bmg->bnm", out, self.bilinear.weight, final2) # (N x V) (V x V) (N x V)^T -> (N, N)
         #print('ein3', final.shape)
-        root_score = torch.einsum("bnh,h->bn", out, self.root)
+        root_score = torch.einsum("bnh,h->bn", out, self.root) # (N x V) x V -> N
         #print('root', root_score)
 
         N = final.shape[1]
@@ -112,7 +112,6 @@ def trn(train_iter, model):
             (-loss).backward()
             losses.append(loss.detach())
             opt.step()
-
 
         if epoch % 10 == 1:            
             print(i, -torch.tensor(losses).mean(), words.shape)
