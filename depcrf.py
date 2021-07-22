@@ -20,12 +20,12 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
                      is_target = True)
 WORD = data.Field(pad_token=None)
 train = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
-                     ) #filter_pred=lambda x: 5 < len(x.word) < 40
-val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
-                     ) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
+                     filter_pred=lambda x: 5 < len(x.word) < 40) #
+# val = torch_struct.data.ConllXDataset("wsj.test.conllx", (('word', WORD), ('head', HEAD)),
+#                      filter_pred=lambda x: 5 < len(x.word) < 40) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
 WORD.build_vocab(train)
-train_iter = data.BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
-val_iter = data.BucketIterator(val, batch_size=2, device="cpu", shuffle=False)
+train_iter = data.BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
+val_iter = data.BucketIterator(val, batch_size=20, device="cpu", shuffle=False)
 
 V = len(WORD.vocab.itos)
 
@@ -114,7 +114,7 @@ def trn(train_iter, model):
             opt.step()
 
         if epoch % 10 == 1:            
-            print(i, -torch.tensor(losses).mean(), words.shape)
+            print(epoch, -torch.tensor(losses).mean(), words.shape)
             losses = []
             # show_deps(dist.argmax[0])
             # plt.show()

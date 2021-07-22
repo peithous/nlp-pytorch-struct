@@ -27,21 +27,20 @@ class ConllXDataset(data.Dataset):
         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
 
 # init_token='<bos>', 
-WORD = data.Field(pad_token=None) # if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
-POS = data.Field(pad_token=None, include_lengths=True) #
+WORD = data.Field(init_token='<bos>', pad_token=None) # if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
+POS = data.Field(init_token='<bos>', pad_token=None, include_lengths=True) #
 
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-#train = ConllXDataset('samIam.conllu', fields)
-train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
-test = ConllXDataset('test.conllu', fields)
+train = ConllXDataset('wsj.train0.conllx', fields)
+#train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields) # include 'was' in vocab with <unk> as its POS
+test = ConllXDataset('wsj.train0.conllx', fields)
 
-WORD.build_vocab(train_DATA) # include 'was' in vocab with <unk> as its POS
-POS.build_vocab(train_DATA) 
+WORD.build_vocab(train) 
+POS.build_vocab(train) 
 
-train_iter = BucketIterator(train_DATA, batch_size=2, device='cpu', shuffle=False)
+train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
-
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
@@ -52,30 +51,23 @@ print(WORD.vocab.stoi)
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
         super().__init__()
+        self.embedding = nn.Embedding.from_pretrained(torch.eye(voc_size).type(torch.FloatTensor), freeze=True) #one hot 
         self.linear = nn.Linear(voc_size, num_pos_tags) # batch x C x V -> batch x C_t x C_t-1
+        self.transition = nn.Linear(num_pos_tags, num_pos_tags)
         
-    def forward(self, count_mat):
-        return F.log_softmax(self.linear(count_mat), dim=1) # normalize C_t given C_t-1 (cols sum to 1)    
+    def forward(self, words):
+        out = self.embedding(words) # (b x N ) -> (b x N x V)
+        final = self.linear(out) # (b x N x V) (V x C) -> (b x N x C)
+        batch, N, C = final.shape
+        vals = final.view(batch, N, C, 1)[:, 1:N] + self.transition.weight.view(1, 1, C, C)
+        vals[:, 0, :, :] += final.view(batch, N, 1, C)[:, 0] 
+        return vals
 
 model = Model(V, C)
 opt = optim.SGD(model.parameters(), lr=0.01)
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
-
-def batch_count_mat(sents, pos, length):   
-    count_matrix = torch.zeros(sents.shape[1], C, V) 
-
-    for b in range(pos.shape[1]):
-
-        for s in range(length[b]):
-            w = sents[s,b]
-            ps = pos[s,b]
-            count_matrix[b, ps, w] += 1
-
-    #print(count_matrix)    
-    return count_matrix
-
 
 def trn(train_iter):
     
@@ -87,21 +79,12 @@ def trn(train_iter):
             #print(i)
             opt.zero_grad() 
             
-            sents = batch.word
+            sents = batch.word.transpose(0,1)
             label, lengths = batch.pos
 
-            #print(lengths)
+            log_potentials = model(sents)
 
-            model_in = batch_count_mat(sents, label, lengths) # batch x C x V -> batch x C_t x C_t-1
-
-            probs = model(model_in)
-            #print(probs.shape)
-            #for param in model.parameters():
-            #    print(i, param) 
-
-            chain = probs.unsqueeze(1).expand(-1, sents.shape[0]-1, -1, -1)  # batch, N, C, C 
-
-            dist = LinearChainCRF(chain) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
+            dist = LinearChainCRF(log_potentials, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
             #print('d', dist.marginals.shape, dist.marginals)
             #print(dist.argmax.shape) 
             #show_chain(dist.argmax[0])
@@ -121,28 +104,19 @@ def trn(train_iter):
             #losses.append(loss.detach())
 
         #print(sum(losses))
-        
-        
+           
         test_losses = []
         for i, batch in enumerate(test_iter):
             model.eval()
 
-            sents = batch.word
+            sents = batch.word.transpose(0,1)
             label, lengths = batch.pos
-            
-            #print(lengths)
 
-            model_in = batch_count_mat(sents, label, lengths) # batch x C x V -> batch x C_t x C_t-1
-
-            probs = model(model_in)
+            log_potentials = model(sents)
                     #print(probs.shape)
                     #for param in model.parameters():
                     #    print(i, param) 
-
-            chain = probs.unsqueeze(1).expand(-1, sents.shape[0]-1, -1, -1)  # batch, N, C, C 
-
-            dist = LinearChainCRF(chain, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
-            
+            dist = LinearChainCRF(log_potentials, lengths=lengths) 
             #print('label', label.transpose(0, 1)[0])  
 
             #print('d', dist.marginals.shape, dist.marginals)
@@ -161,7 +135,6 @@ def trn(train_iter):
             test_losses.append(loss.detach())
             #print(epoch, loss)
             
-        # print(test_losses, len(test_losses))
         print(torch.tensor(test_losses).mean())
 
 trn(train_iter)
