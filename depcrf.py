@@ -21,9 +21,12 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
 WORD = data.Field(pad_token=None)
 train = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
                      filter_pred=lambda x: 5 < len(x.word) < 40) #
-# val = torch_struct.data.ConllXDataset("wsj.test.conllx", (('word', WORD), ('head', HEAD)),
-#                      filter_pred=lambda x: 5 < len(x.word) < 40) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
+val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
+                     filter_pred=lambda x: 5 < len(x.word) < 40) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
+# train = torch_struct.data.ConllXDataset('samIam.conllu', (('word', WORD), ('head', HEAD)))
+# val = torch_struct.data.ConllXDataset('samIam.conllu', (('word', WORD), ('head', HEAD)))
 WORD.build_vocab(train)
+
 train_iter = data.BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
 val_iter = data.BucketIterator(val, batch_size=20, device="cpu", shuffle=False)
 
@@ -36,15 +39,14 @@ class Model(nn.Module):
         self.embedding = nn.Embedding.from_pretrained(torch.eye(V).type(torch.FloatTensor), freeze=True) #one hot 
         # F.one_hot(torch.arange(V))
         self.linear = nn.Linear(V, V)
-        self.bilinear = nn.Linear(V, V)
-
+        #self.bilinear = nn.Linear(V, V)
         self.root = nn.Parameter(torch.rand(V))
         
     def forward(self, words):
         out = self.embedding(words) # (b x N ) -> (b x N x V)
-        final2 = self.linear(out) # (b x N x V) (V x V) -> (b x N x V)
-        final = torch.einsum("bnh,hg,bmg->bnm", out, self.bilinear.weight, final2) # (N x V) (V x V) (N x V)^T -> (N, N)
-        #print('ein3', final.shape)
+        # final2 = self.linear(out) # (b x N x V) (V x V) -> (b x N x V)
+        # final = torch.einsum("bnh,hg,bmg->bnm", out, self.bilinear.weight, final2) # (N x V) (V x V) (N x V)^T -> (N, N)
+        final = torch.einsum("bnh,hg,bmg->bnm", out, self.linear.weight, out) 
         root_score = torch.einsum("bnh,h->bn", out, self.root) # (N x V) x V -> N
         #print('root', root_score)
 
@@ -97,20 +99,31 @@ def trn(train_iter, model):
             #batch, _ = label.shape
             
             final = model(words)
+            final.retain_grad()
             #print(model.embedding.weight)
-            #print(final)
+            #print(final.shape)
             dist = DependencyCRF(final, lengths=lengths)
             # dist.multiroot=False
+            marginals = dist.marginals
+            #print(marginals.shape)
+            #print(marginals.requires_grad)
 
             labels = dist.struct.to_parts(label, lengths=lengths).type_as(final)
             #print('labels', labels.shape)
 
             log_prob = dist.log_prob(labels)
             #print(log_prob.shape)
-
             loss = log_prob.sum()
+            
+            
             (-loss).backward()
+            #print(final.grad.shape)
+            #print(marginals.grad)
             losses.append(loss.detach())
+
+            # for idx, param in enumerate(model.parameters()):
+            #     print(idx, param.grad)
+
             opt.step()
 
         if epoch % 10 == 1:            

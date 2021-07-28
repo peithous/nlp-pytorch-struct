@@ -26,14 +26,13 @@ class ConllXDataset(data.Dataset):
             examples.append(data.Example.fromlist(columns, fields))
         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
 
-# init_token='<bos>', 
 WORD = data.Field(init_token='<bos>', pad_token=None) # if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
 POS = data.Field(init_token='<bos>', pad_token=None, include_lengths=True) #
 
 fields = (('word', WORD), ('pos', POS), (None, None))
 
 train = ConllXDataset('wsj.train0.conllx', fields)
-#train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields) # include 'was' in vocab with <unk> as its POS
+#train = ConllXDataset('samIam.conllu', fields)
 test = ConllXDataset('wsj.train0.conllx', fields)
 
 WORD.build_vocab(train) 
@@ -83,6 +82,7 @@ def trn(train_iter):
             label, lengths = batch.pos
 
             log_potentials = model(sents)
+            # print(log_potentials.shape)
 
             dist = LinearChainCRF(log_potentials, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
             #print('d', dist.marginals.shape, dist.marginals)
