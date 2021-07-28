@@ -1,3 +1,4 @@
+from torch.utils.tensorboard import SummaryWriter
 import torchtext
 import torch
 import torch.nn as nn
@@ -7,6 +8,8 @@ import torchtext.data as data
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import torch.optim as optim
+
+writer = SummaryWriter(log_dir="em-dep")
 
 def batch_num(nums):
     lengths = torch.tensor([len(n) for n in nums]).long()
@@ -27,8 +30,8 @@ val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('he
 # val = torch_struct.data.ConllXDataset('samIam.conllu', (('word', WORD), ('head', HEAD)))
 WORD.build_vocab(train)
 
-train_iter = data.BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
-val_iter = data.BucketIterator(val, batch_size=20, device="cpu", shuffle=False)
+train_iter = data.BucketIterator(train, batch_size=10, device='cpu', shuffle=False)
+val_iter = data.BucketIterator(val, batch_size=10, device="cpu", shuffle=False)
 
 V = len(WORD.vocab.itos)
 
@@ -56,7 +59,7 @@ class Model(nn.Module):
         return final
 
 model = Model(V)
-opt = optim.SGD(model.parameters(), lr=1e-4)
+opt = optim.SGD(model.parameters(), lr=1e-3)
 
 def show_deps(tree):
     plt.imshow(tree.detach())
@@ -81,7 +84,7 @@ def validate(val_iter):
 
     print(total_edges, incorrect_edges)   
     model.train()
-    return gold1
+    return incorrect_edges 
 
 def trn(train_iter, model):
     for epoch in range(100):
@@ -99,14 +102,10 @@ def trn(train_iter, model):
             #batch, _ = label.shape
             
             final = model(words)
-            final.retain_grad()
-            #print(model.embedding.weight)
-            #print(final.shape)
             dist = DependencyCRF(final, lengths=lengths)
             # dist.multiroot=False
-            marginals = dist.marginals
-            #print(marginals.shape)
-            #print(marginals.requires_grad)
+
+            #print(dist.marginals)
 
             labels = dist.struct.to_parts(label, lengths=lengths).type_as(final)
             #print('labels', labels.shape)
@@ -115,14 +114,9 @@ def trn(train_iter, model):
             #print(log_prob.shape)
             loss = log_prob.sum()
             
-            
             (-loss).backward()
-            #print(final.grad.shape)
-            #print(marginals.grad)
+            writer.add_scalar('loss', -loss, epoch)
             losses.append(loss.detach())
-
-            # for idx, param in enumerate(model.parameters()):
-            #     print(idx, param.grad)
 
             opt.step()
 
@@ -133,7 +127,9 @@ def trn(train_iter, model):
             # plt.show()
             
         if epoch % 10 == 1:
-            gold = validate(val_iter)        
+            incorrect_edges = validate(val_iter)        
+            writer.add_scalar('incorrect_edges', incorrect_edges, epoch)      
+
             # show_deps(gold.argmax[0])
             # plt.show()
 

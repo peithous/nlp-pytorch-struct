@@ -1,3 +1,4 @@
+from torch.utils.tensorboard import SummaryWriter
 import torchtext
 import torch
 import torch.nn as nn
@@ -7,6 +8,8 @@ import torchtext.data as data
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import torch.optim as optim
+
+writer = SummaryWriter(log_dir="em-dep")
 
 def batch_num(nums):
     lengths = torch.tensor([len(n) for n in nums]).long()
@@ -20,15 +23,15 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
                      is_target = True)
 WORD = data.Field(pad_token=None)
 train = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
-                     filter_pred=lambda x: 5 < len(x.word) < 20) #
+                     filter_pred=lambda x: 5 < len(x.word) < 40) #
 val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
-                     filter_pred=lambda x: 5 < len(x.word) < 20) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
+                     filter_pred=lambda x: 5 < len(x.word) < 40) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
 # train = torch_struct.data.ConllXDataset('samIam.conllu', (('word', WORD), ('head', HEAD)))
 # val = torch_struct.data.ConllXDataset('samIam.conllu', (('word', WORD), ('head', HEAD)))
 WORD.build_vocab(train)
 
-train_iter = data.BucketIterator(train, batch_size=3, device='cpu', shuffle=False)
-val_iter = data.BucketIterator(val, batch_size=3, device="cpu", shuffle=False)
+train_iter = data.BucketIterator(train, batch_size=10, device='cpu', shuffle=False)
+val_iter = data.BucketIterator(val, batch_size=10, device="cpu", shuffle=False)
 
 V = len(WORD.vocab.itos)
 
@@ -77,11 +80,11 @@ def validate(val_iter):
         incorrect_edges += (argmax[:, :].cpu() - gold[:, :].cpu()).abs().sum() / 2.0
         total_edges += gold.sum()
 
-        gold1 = DependencyCRF(gold, lengths=lengths)
+        gold1 = DependencyCRF(gold, lengths=lengths)       
 
     print(total_edges, incorrect_edges)   
     model.train()
-    return gold1
+    return incorrect_edges
 
 def trn(train_iter, model):
     for epoch in range(100):
@@ -101,22 +104,17 @@ def trn(train_iter, model):
             final = model(words)
 
             dist = DependencyCRF(final, lengths=lengths)
-            # dist.multiroot=False
-            # dist.arginals: b x N x N
 
-            # labels = dist.struct.to_parts(label, lengths=lengths).type_as(final)
+            labels = dist.struct.to_parts(label, lengths=lengths).type_as(final)
             #print('labels', labels.shape)
 
-            # log_prob = dist.log_prob(dist.argmax)
-            #print(dist.marginals.shape)
-
+            # log_prob = dist.log_prob(labels) 
             # loss = log_prob.sum()
             # (-loss).backward()
             # losses.append(loss.detach())
 
             theta = F.log_softmax(dist.marginals, dim=2) # most likely child at each position: b x N x N 
             #print(theta.shape)
-
             theta_max, theta_argmax = theta.max(2)
             
             batch_loss = []
@@ -128,8 +126,9 @@ def trn(train_iter, model):
                 #print(em_loss)
                 batch_loss.append(em_loss)
 
-            loss = sum(batch_loss)/len(batch_loss)
+            loss = sum(batch_loss)/len(batch_loss) 
             #print(loss)
+            writer.add_scalar('loss', -loss, epoch)
             (-loss).backward()
             losses.append(loss.detach())
             
@@ -145,7 +144,8 @@ def trn(train_iter, model):
             # plt.show()
             
         if epoch % 10 == 1:
-            gold = validate(val_iter)        
+            incorrect_edges = validate(val_iter)  
+            writer.add_scalar('incorrect_edges', incorrect_edges, epoch)      
             # show_deps(gold.argmax[0])
             # plt.show()
 
