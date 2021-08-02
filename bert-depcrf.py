@@ -27,10 +27,10 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
                      postprocessing=batch_num)
 HEAD.is_target = True
 
-train = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
+train = torch_struct.data.ConllXDataset("test0.conllx", (('word', WORD), ('head', HEAD)),
                      ) #filter_pred=lambda x: 5 < len(x.word[0]) < 40
-#train_iter = torchtext.data.BucketIterator(train, batch_size=3, device="cpu", shuffle=False)
-train_iter = torch_struct.data.TokenBucket(train, batch_size=10, device="cpu")
+train_iter = torchtext.data.BucketIterator(train, batch_size=3, device="cpu", shuffle=False)
+#train_iter = torch_struct.data.TokenBucket(train, batch_size=10, device="cpu")
 
 val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
                      ) # filter_pred=lambda x: 5 < len(x.word[0]) < 40

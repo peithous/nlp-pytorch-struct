@@ -1,3 +1,4 @@
+
 import torchtext.data as data
 from torchtext.data import BucketIterator
 import torch
@@ -30,17 +31,14 @@ POS = data.Field(include_lengths=True, pad_token=None) # if included in class vo
 fields = (('word', WORD), ('pos', POS), (None, None))
 
 train = ConllXDataset('samIam.conllu', fields)
-train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
+train_DATA = ConllXDataset('samIam-data-copies.conllu', fields)
 test = ConllXDataset('test.conllu', fields)
 
 WORD.build_vocab(train_DATA) # include 'was' in vocab with <unk> as its POS
 POS.build_vocab(train_DATA) 
 print(POS.vocab.stoi)
 
-# to do: store parameter matrices in model class, pre-trained/trainable embeddings
-# add learnable coefs for supervised/EM models: 
-    #https://homes.cs.washington.edu/~nasmith/slides/LXMLS-6-16-18.pdf
-    # https://www.cs.cmu.edu/~nasmith/papers/smith.tut04a.pdf 
+# to do: store parameter matrices in model class, embeddings, EM
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 train_iter_DATA = BucketIterator(train_DATA, batch_size=2, device='cpu', shuffle=False)
 
@@ -89,16 +87,16 @@ def trn(train_iter, model):
             model.update_a(label[:, b], lengths[b])
             model.update_b(label[:, b], words[:, b], lengths[b])
     # print(model.trnsn_prms)
-    # print([(POS.vocab.itos[x[0]], POS.vocab.itos[x[1]], model.trnsn_prms[x]) for x in model.trnsn_prms])
-    # print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
+    print([(POS.vocab.itos[x[0]], POS.vocab.itos[x[1]], model.trnsn_prms[x]) for x in model.trnsn_prms])
+    print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
 
     transition = torch.zeros((C, C)) 
     for x in model.trnsn_prms:
         transition[x[0], x[1]] = model.trnsn_prms[x] # populate with counts: (pos_n-1, pos_n)
     #print(transition)
     for row in range(transition.shape[0]):
-        if row!=POS.vocab.stoi['PUNCT']: # 0-probs at p(z_n | z_n-1 = punct) 
-            transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
+        if row!=POS.vocab.stoi['PUNCT']: # 0 probs at p(z_n | z_n-1 = punct)
+            transition[row, :] = Categorical(transition[row, :]).probs # normalize counts, don't use logits, since 0 prob and they will be re-normalized in the lin-chain crf hmm
     #print(transition.shape, '\n', transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
     print('transition', '\n', transition)
@@ -156,15 +154,15 @@ def trn(train_iter, model):
 model = Model()
 trn(train_iter, model)
 # UNK PUNCT is observed once; p(w=unk| UNK) = 1
-# probs/logits: p('was'| UNK/AUX) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
+# probs: p('was'| UNK/AUX) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
 # probs: max p(z| unk unk unk unk.) = UNK UNK UNK PUNCT
-# logits: max p(z| unk unk unk unk.) = UNK PUNCT UNK PUNCT
 
 print('data copies') # ie repeat PRON AUX PUNCT
 model1 = Model()
 trn(train_iter_DATA, model1)
 # UNK PUNCT is observed twice; p(w=unk| UNK) = 1
 # probs: p('was'| UNK) = 0.3, p('was'| AUX) = 0 -> max p(z| Sam I was.) = PRON AUX PUNCT
-# logits: p('was'| UNK) = 0.3, p('was'| AUX) = 0 -> max p(z| Sam I was.) = PRON UNK PUNCT
 # probs: p(z| unk unk unk unk.) =  UNK PRON AUX PUNCT 
-# logits: max p(z| unk unk unk unk.) = UNK PUNCT UNK PUNCT
+
+# https://homes.cs.washington.edu/~nasmith/slides/LXMLS-6-16-18.pdf
+# https://www.cs.cmu.edu/~nasmith/papers/smith.tut04a.pdf 

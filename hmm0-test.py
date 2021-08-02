@@ -1,9 +1,12 @@
+from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
 import torch
 from torch.distributions import Categorical
 from torch_struct import HMM
 import matplotlib.pyplot as plt
+
+writer = SummaryWriter(log_dir="hmm-1hot")
 
 class ConllXDataset(data.Dataset):
     def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
@@ -28,11 +31,11 @@ POS = data.Field(include_lengths=True, pad_token=None)
 fields = (('word', WORD), ('pos', POS), (None, None))
 
 train = ConllXDataset('samIam.conllu', fields)
-train_DATA = ConllXDataset('samIam-dataCopies.conllu', fields)
+#train_DATA = ConllXDataset('samIam-data-copies.conllu', fields)
 test = ConllXDataset('test.conllu', fields)
 
-WORD.build_vocab(train_DATA) 
-POS.build_vocab(train_DATA)
+WORD.build_vocab(train) 
+POS.build_vocab(train)
 
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
@@ -80,19 +83,20 @@ def trn(train_iter, model):
         transition[x[0], x[1]] = model.trnsn_prms[x] # populate with counts: (pos_n-1, pos_n)
     for row in range(transition.shape[0]):
         if row!=POS.vocab.stoi['PUNCT']: # 0-probs at p(z_n | z_n-1 = punct) 
-            transition[row, :] = Categorical(transition[row, :]).logits # normalize counts
+            transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
+    print(transition)
 
     init = torch.zeros(C)
     for x in range(C):
         init[x] = POS.vocab.freqs[POS.vocab.itos[x]]
-    init = Categorical(init).logits
+    init = Categorical(init).probs
    
     emission = torch.zeros((C, V)) 
     for x in model.emssn_prms:  
         emission[x[0], x[1]] = model.emssn_prms[x]
     for row in range(emission.shape[0]):
-        emission[row, :] = Categorical(emission[row, :]).logits # p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
+        emission[row, :] = Categorical(emission[row, :]).probs # p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
     emission = emission.transpose(0,1) # p(x_n| z_n)
 
     # for ex in train_iter:

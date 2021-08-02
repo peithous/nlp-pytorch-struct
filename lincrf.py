@@ -31,21 +31,21 @@ POS = data.Field(init_token='<bos>', pad_token=None, include_lengths=True) #
 
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-train = ConllXDataset('wsj.train0.conllx', fields)
+train = ConllXDataset('test0.conllx', fields)
 #train = ConllXDataset('samIam.conllu', fields)
 test = ConllXDataset('wsj.train0.conllx', fields)
 
 WORD.build_vocab(train) 
 POS.build_vocab(train) 
 
-train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
-test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
+train_iter = BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
+test_iter = BucketIterator(test, batch_size=20, device='cpu', shuffle=False)
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
 print(C, V)
-print(POS.vocab.stoi)
-print(WORD.vocab.stoi)
+# print(POS.vocab.stoi)
+# print(WORD.vocab.stoi)
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
@@ -135,7 +135,7 @@ def trn(train_iter):
             test_losses.append(loss.detach())
             #print(epoch, loss)
             
-        print(torch.tensor(test_losses).mean())
+        print(-torch.tensor(test_losses).mean())
 
 trn(train_iter)
 

@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import torch.optim as optim
 
-writer = SummaryWriter(log_dir="em-dep")
+writer = SummaryWriter(log_dir="dep-crf")
 
 def batch_num(nums):
     lengths = torch.tensor([len(n) for n in nums]).long()
@@ -22,7 +22,7 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
                      postprocessing=batch_num, 
                      is_target = True)
 WORD = data.Field(pad_token=None)
-train = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
+train = torch_struct.data.ConllXDataset("test0.conllx", (('word', WORD), ('head', HEAD)),
                      filter_pred=lambda x: 5 < len(x.word) < 40) #
 val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
                      filter_pred=lambda x: 5 < len(x.word) < 40) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
@@ -30,8 +30,8 @@ val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('he
 # val = torch_struct.data.ConllXDataset('samIam.conllu', (('word', WORD), ('head', HEAD)))
 WORD.build_vocab(train)
 
-train_iter = data.BucketIterator(train, batch_size=10, device='cpu', shuffle=False)
-val_iter = data.BucketIterator(val, batch_size=10, device="cpu", shuffle=False)
+train_iter = data.BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
+val_iter = data.BucketIterator(val, batch_size=20, device="cpu", shuffle=False)
 
 V = len(WORD.vocab.itos)
 
