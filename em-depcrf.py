@@ -22,10 +22,10 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
                      postprocessing=batch_num, 
                      is_target = True)
 WORD = data.Field(pad_token=None)
-train = torch_struct.data.ConllXDataset("test0.conllx", (('word', WORD), ('head', HEAD)),
-                     filter_pred=lambda x: 5 < len(x.word) < 40) #
-val = torch_struct.data.ConllXDataset("test0.conllx", (('word', WORD), ('head', HEAD)),
-                     filter_pred=lambda x: 5 < len(x.word) < 40) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
+train = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
+                    filter_pred=lambda x: 5 < len(x.word) < 40) #
+val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
+                    filter_pred=lambda x: 5 < len(x.word) < 40) #  filter_pred=lambda x: 5 < len(x.word[0]) < 40
 # train = torch_struct.data.ConllXDataset('samIam.conllu', (('word', WORD), ('head', HEAD)))
 # val = torch_struct.data.ConllXDataset('samIam.conllu', (('word', WORD), ('head', HEAD)))
 WORD.build_vocab(train)
@@ -59,7 +59,7 @@ class Model(nn.Module):
         return final
 
 model = Model(V)
-opt = optim.SGD(model.parameters(), lr=1e-3)
+opt = optim.SGD(model.parameters(), lr=1e-4)
 
 def show_deps(tree):
     plt.imshow(tree.detach())
@@ -87,7 +87,7 @@ def validate(val_iter):
     return incorrect_edges
 
 def trn(train_iter, model):
-    for epoch in range(200):
+    for epoch in range(400):
         model.train()
         losses = []
 
@@ -104,14 +104,11 @@ def trn(train_iter, model):
             final = model(words)
 
             dist = DependencyCRF(final, lengths=lengths)
-
+            #print(dist.marginals.shape)
+            #print(dist.entropy.shape)
+            
             labels = dist.struct.to_parts(label, lengths=lengths).type_as(final)
             #print('labels', labels.shape)
-
-            # log_prob = dist.log_prob(labels) 
-            # loss = log_prob.sum()
-            # (-loss).backward()
-            # losses.append(loss.detach())
 
             theta = F.log_softmax(dist.marginals, dim=2) # most likely child at each position: b x N x N 
             #print(theta.shape)
@@ -126,7 +123,9 @@ def trn(train_iter, model):
                 #print(em_loss)
                 batch_loss.append(em_loss)
 
-            loss = sum(batch_loss)/len(batch_loss) 
+            loss = (sum(batch_loss) - dist.entropy.sum())/len(batch_loss)  
+
+            #loss = dist.log_prob(labels).sum() - dist.entropy.sum()
             #print(loss)
             writer.add_scalar('loss', -loss, epoch)
             (-loss).backward()

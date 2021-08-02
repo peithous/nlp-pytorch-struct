@@ -31,6 +31,7 @@ train = ConllXDataset('samIam.conllu', fields)
 
 WORD.build_vocab(train) 
 POS.build_vocab(train)
+print(POS.vocab.stoi)
 
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 
@@ -67,6 +68,9 @@ def trn(train_iter, model):
     for ex in train_iter:
         words = ex.word
         label, lengths = ex.pos
+        for x in range(words.shape[1]):
+            print(' '.join([WORD.vocab.itos[i] for i in words[:, x]]))
+            print(' '.join([POS.vocab.itos[i] for i in label[:, x]]))
 
         for b in range(label.shape[1]):
             model.update_a(label[:, b], lengths[b])
@@ -76,7 +80,7 @@ def trn(train_iter, model):
     for x in model.trnsn_prms:
         transition[x[0], x[1]] = model.trnsn_prms[x] # populate with counts: (pos_n-1, pos_n)
     for row in range(transition.shape[0]):
-        if row!=POS.vocab.stoi['PUNCT']: # 0-probs at p(z_n | z_n-1 = punct) 
+        if row!=POS.vocab.stoi['PUNCT']: # p(z_n | z_n-1 = punct) = 0 
             transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
 
@@ -91,14 +95,26 @@ def trn(train_iter, model):
     for row in range(emission.shape[0]):
         emission[row, :] = Categorical(emission[row, :]).probs # p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
     emission = emission.transpose(0,1) # p(x_n| z_n)
-
+   
+    losses = []
     for ex in train_iter:
+        
         label, lengths = ex.pos
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
         print('label', label.transpose(0, 1)[0])  
         show_chain(dist.argmax[0])  
         plt.show()
+
+        labels = HMM.struct.to_parts(label.transpose(0, 1) \
+                         .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
+        print(1, dist.log_prob(labels))
+        print(2, dist.log_prob(dist.argmax))
+        
+        loss = dist.log_prob(labels).sum()
+        losses.append(loss.detach())
+        print(torch.tensor(losses).mean())
+
 
 model = Model()
 trn(train_iter, model)

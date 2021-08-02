@@ -18,7 +18,7 @@ def batch_num(nums):
     for b, n in enumerate(nums):
         out[b, :len(n)] = torch.tensor(n)
     return out, lengths
-HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
+HEAD = data.RawField(preprocessing=lambda x: [int(i) for i in x],
                      postprocessing=batch_num, 
                      is_target = True)
 WORD = data.Field(pad_token=None)
@@ -98,7 +98,7 @@ def trn(train_iter, model):
             # print('lens', ex.head[1])
             
             words = ex.word.transpose(0,1)
-            label, lengths = ex.head
+            label, lengths = ex.head # b x sq
             #batch, _ = label.shape
             
             final = model(words)

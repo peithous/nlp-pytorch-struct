@@ -30,9 +30,9 @@ WORD = data.Field(pad_token=None)
 POS = data.Field(include_lengths=True, pad_token=None) 
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-train = ConllXDataset('samIam.conllu', fields)
+train = ConllXDataset('wsj.train0.conllx', fields)
 #train_DATA = ConllXDataset('samIam-data-copies.conllu', fields)
-test = ConllXDataset('test.conllu', fields)
+test = ConllXDataset('wsj.train0.conllx', fields)
 
 WORD.build_vocab(train) 
 POS.build_vocab(train)
@@ -78,25 +78,27 @@ def trn(train_iter, model):
             model.update_a(label[:, b], lengths[b])
             model.update_b(label[:, b], words[:, b], lengths[b])
 
-    transition = torch.zeros((C, C)) 
-    for x in model.trnsn_prms:
-        transition[x[0], x[1]] = model.trnsn_prms[x] # populate with counts: (pos_n-1, pos_n)
-    for row in range(transition.shape[0]):
-        if row!=POS.vocab.stoi['PUNCT']: # 0-probs at p(z_n | z_n-1 = punct) 
-            transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
-    transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
-    print(transition)
-
     init = torch.zeros(C)
     for x in range(C):
         init[x] = POS.vocab.freqs[POS.vocab.itos[x]]
     init = Categorical(init).probs
+
+    transition = torch.zeros((C, C)) 
+    for x in model.trnsn_prms:
+        transition[x[0], x[1]] = model.trnsn_prms[x] # populate with counts: (pos_n-1, pos_n)
+    for row in range(transition.shape[0]):
+        if row!=POS.vocab.stoi['.'] and row!=POS.vocab.stoi['<unk>']: # 0-probs at p(z_n | z_n-1 = punct) 
+            transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
+    transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
+    print(transition)
+
    
     emission = torch.zeros((C, V)) 
     for x in model.emssn_prms:  
         emission[x[0], x[1]] = model.emssn_prms[x]
     for row in range(emission.shape[0]):
-        emission[row, :] = Categorical(emission[row, :]).probs # p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
+        if row!=POS.vocab.stoi['<unk>']: 
+            emission[row, :] = Categorical(emission[row, :]).probs # p(w_i= ·|punct) = 1
     emission = emission.transpose(0,1) # p(x_n| z_n)
 
     # for ex in train_iter:

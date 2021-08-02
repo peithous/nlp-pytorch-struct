@@ -8,12 +8,11 @@ import matplotlib.pyplot as plt
 
 writer = SummaryWriter(log_dir="hmm-1hot")
 
-
 class ConllXDataset(data.Dataset):
     def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
         examples = []
         columns = [[], []]
-        column_map = {1: 0, 4: 1}
+        column_map = {1: 0, 3: 1}
         with open(path, encoding=encoding) as input_file:
             for line in input_file:
                 line = line.strip()
@@ -27,20 +26,13 @@ class ConllXDataset(data.Dataset):
             examples.append(data.Example.fromlist(columns, fields))
         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
 
-def batch_num(nums, xx):
-    lengths = torch.tensor([len(n) for n in nums]).long()
-    n = lengths.max()
-    out = torch.zeros(len(nums), n).long()
-    for b, n in enumerate(nums):
-        out[b, :len(n)] = torch.tensor(n)
-    return out, lengths
 
-WORD = data.Field(pad_token=None)
-POS = data.Field(include_lengths=True, pad_token=None) 
+WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>', 
+POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-train = ConllXDataset('wsj.train0.conllx', fields)
-test = ConllXDataset('test00.conllx', fields)
+train = ConllXDataset('test0.conllx', fields)
+test = ConllXDataset('wsj.train0.conllx', fields)
 
 WORD.build_vocab(train) 
 POS.build_vocab(train)
@@ -51,8 +43,10 @@ test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
 C = len(POS.vocab)
 V = len(WORD.vocab)
 print('C', C, 'V', V)
+print(POS.vocab.freqs)
 print(POS.vocab.itos)
-print(WORD.vocab.itos)
+
+# print(WORD.vocab.itos)
 
 class Model():
     def __init__(self):
@@ -84,6 +78,10 @@ def trn(train_iter, model):
         words = ex.word
         label, lengths = ex.pos
 
+        # for x in range(words.shape[1]):
+        #     print(' '.join([WORD.vocab.itos[i] for i in words[:lengths[x], x]]))
+        #     print(' '.join([POS.vocab.itos[i] for i in label[:lengths[x], x]]), '\n')
+
         for b in range(label.shape[1]):
             model.update_a(label[:, b], lengths[b])
             model.update_b(label[:, b], words[:, b], lengths[b])
@@ -95,12 +93,12 @@ def trn(train_iter, model):
     init = Categorical(init).probs
     #print(init)
     
-    # print([(POS.vocab.itos[x[0]], POS.vocab.itos[x[1]], model.trnsn_prms[x]) for x in model.trnsn_prms])
+    #print([(POS.vocab.itos[x[0]], POS.vocab.itos[x[1]], model.trnsn_prms[x]) for x in model.trnsn_prms])
     transition = torch.zeros((C, C)) 
     for x in model.trnsn_prms:
         transition[x[0], x[1]] = model.trnsn_prms[x] # get(pos_n-1, pos_n) counts
     for row in range(transition.shape[0]):
-        if row!=POS.vocab.stoi['.'] and row!=POS.vocab.stoi['<unk>']: # 0 prob at p(z_n | z_n-1 = punct) 
+        if row!=POS.vocab.stoi['<eos>'] and row!=POS.vocab.stoi['<unk>']: # row!=POS.vocab.stoi['.'] and p(z_n | z_n-1 = punct) = 0
             transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
     #print(transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
@@ -112,7 +110,7 @@ def trn(train_iter, model):
         emission[x[0], x[1]] = model.emssn_prms[x]
     for row in range(emission.shape[0]):
         if row!=POS.vocab.stoi['<unk>']: 
-            emission[row, :] = Categorical(emission[row, :]).probs # p(w_i= ·|punct) = 1
+            emission[row, :] = Categorical(emission[row, :]).probs # 
     emission = emission.transpose(0,1) # p(x_n| z_n)
     #print(emission)
 
@@ -120,12 +118,13 @@ def trn(train_iter, model):
     for ex in train_iter:
         label, lengths = ex.pos
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
-        print(observations.shape)
+
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
         labels = HMM.struct.to_parts(label.transpose(0, 1) \
                          .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
-        # print('label', label.transpose(0, 1)[0])  
-        # print(dist.marginals.shape)
+        
+        print('label', label.transpose(0, 1)[0])  
+        #print(HMM.struct.from_parts(dist.argmax)[0][0])
         show_chain(dist.argmax[0])  
         plt.show()
         loss = dist.log_prob(labels).sum()
