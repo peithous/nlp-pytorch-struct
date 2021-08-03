@@ -28,14 +28,13 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
 HEAD.is_target = True
 
 train = torch_struct.data.ConllXDataset("test0.conllx", (('word', WORD), ('head', HEAD)),
-                     ) #filter_pred=lambda x: 5 < len(x.word[0]) < 40
-train_iter = torchtext.data.BucketIterator(train, batch_size=3, device="cpu", shuffle=False)
-#train_iter = torch_struct.data.TokenBucket(train, batch_size=10, device="cpu")
-
+                    filter_pred=lambda x: 5 < len(x.word[0]) < 40 ) #
 val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
-                     ) # filter_pred=lambda x: 5 < len(x.word[0]) < 40
-val_iter = torchtext.data.BucketIterator(val, batch_size=10, device="cpu", shuffle=False)
+                    filter_pred=lambda x: 5 < len(x.word[0]) < 40 ) # filter_pred=lambda x: 5 < len(x.word[0]) < 40
 
+train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
+#train_iter = torch_struct.data.TokenBucket(train, batch_size=10, device="cpu")
+val_iter = torchtext.data.BucketIterator(val, batch_size=20, device="cpu", shuffle=False)
 
 H = config["H"]
 class Model(nn.Module):
@@ -61,7 +60,6 @@ class Model(nn.Module):
 model = Model(H)
 #wandb.watch(model)
 #model.cuda()
-
 
 def show_deps(tree):
     plt.imshow(tree.detach())
@@ -113,8 +111,6 @@ def train(train_iter, val_iter, model):
     #             final[b, lengths[b]-1:, :] = 0
     #             final[b, :, lengths[b]-1:] = 0
 
-    #         print(2, final.shape, final)
-
     #       if not lengths.max() == final.shape[1]:
             if not lengths.max() <= final.shape[1] + 1:
                 print("fail")
@@ -137,12 +133,11 @@ def train(train_iter, val_iter, model):
         #print(-torch.tensor(losses).mean())
 
         if epoch % 10 == 1:            
-            print(i, -torch.tensor(losses).mean(), words.shape)
+            print(epoch, -torch.tensor(losses).mean(), words.shape)
             losses = []
 #             show_deps(dist.argmax[0])
 #             plt.show()
-            
-        if epoch % 10 == 1:
+ 
             gold = validate(val_iter)        
 #             show_deps(gold.argmax[0])
 #             plt.show()

@@ -38,7 +38,6 @@ WORD.build_vocab(train_DATA) # include 'was' in vocab with <unk> as its POS
 POS.build_vocab(train_DATA) 
 print(POS.vocab.stoi)
 
-# to do: store parameter matrices in model class, embeddings, EM
 train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
 train_iter_DATA = BucketIterator(train_DATA, batch_size=2, device='cpu', shuffle=False)
 

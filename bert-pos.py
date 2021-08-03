@@ -43,8 +43,8 @@ val = ConllXDataset('wsj.train0.conllx', fields)
 UD_TAG.build_vocab(train.udtag)
 
 #train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
-train_iter = torchtext.data.BucketIterator(train, batch_size=10, device="cpu")
-val_iter = torchtext.data.BucketIterator(val, batch_size=10, device="cpu")
+train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
+val_iter = torchtext.data.BucketIterator(val, batch_size=20, device="cpu", shuffle=False)
 
 C = len(UD_TAG.vocab)
 
@@ -112,10 +112,10 @@ def train(train_iter, val_iter, model):
 
             dist = LinearChainCRF(log_potentials,
                                 lengths=lengths) #lengths.cuda()   
-
-            
+         
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1), C, lengths=lengths) \
                                 .type_as(dist.log_potentials)
+            
             loss = dist.log_prob(labels).sum()
             (-loss).backward()
             
@@ -125,11 +125,11 @@ def train(train_iter, val_iter, model):
 
             losses.append(loss.detach())
             
-            if epoch % 10 == 1:            
-                print(epoch, -torch.tensor(losses).mean(), words.shape)
-                val_loss = validate(val_iter)
-                print(val_loss)
-                #wandb.log({"train_loss":-torch.tensor(losses).mean(), 
-                #           "val_loss" : val_loss})
+        if epoch % 10 == 1:            
+            print(epoch, -torch.tensor(losses).mean(), words.shape)
+            val_loss = validate(val_iter)
+            print(val_loss)
+            #wandb.log({"train_loss":-torch.tensor(losses).mean(), 
+            #           "val_loss" : val_loss})
     
 train(train_iter, val_iter, model) #.cuda()

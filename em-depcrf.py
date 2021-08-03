@@ -22,6 +22,7 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
                      postprocessing=batch_num, 
                      is_target = True)
 WORD = data.Field(pad_token=None)
+
 train = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
                     filter_pred=lambda x: 5 < len(x.word) < 40) #
 val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
