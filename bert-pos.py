@@ -8,7 +8,6 @@ from pytorch_transformers import *
 
 config = {"bert": "bert-base-cased", "H" : 768, "dropout": 0.2}
 
-
 class ConllXDataset(data.Dataset):
     def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
         examples = []
@@ -44,8 +43,8 @@ val = ConllXDataset('wsj.train0.conllx', fields)
 UD_TAG.build_vocab(train.udtag)
 
 #train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
-train_iter = torchtext.data.BucketIterator(train, batch_size=3, device="cpu")
-val_iter = torchtext.data.BucketIterator(val, batch_size=3, device="cpu")
+train_iter = torchtext.data.BucketIterator(train, batch_size=10, device="cpu")
+val_iter = torchtext.data.BucketIterator(val, batch_size=10, device="cpu")
 
 C = len(UD_TAG.vocab)
 
@@ -86,8 +85,9 @@ def validate(itera):
         gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1), C,
                                               lengths=lengths).type_as(argmax)
         incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum() / 2.0
-        total += argmax.sum()            
-        
+        total += argmax.sum()    
+
+    print(total, incorrect_edges)           
     model.train()    
     return incorrect_edges / total   
     

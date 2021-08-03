@@ -26,8 +26,11 @@ class ConllXDataset(data.Dataset):
             examples.append(data.Example.fromlist(columns, fields))
         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
 
-WORD = data.Field(init_token='<bos>', pad_token=None) # if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
-POS = data.Field(init_token='<bos>', pad_token=None, include_lengths=True) #
+# if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
+# add eos bc '.' might not always be the eos 
+WORD = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None) 
+POS = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None, include_lengths=True) #
+
 
 fields = (('word', WORD), ('pos', POS), (None, None))
 
@@ -68,18 +71,38 @@ opt = optim.SGD(model.parameters(), lr=0.01)
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
-def trn(train_iter):
+def validate(iter):
+    incorrect_edges = 0
+    total = 0 
+    model.eval()
+    for i, batch in enumerate(test_iter):
+        sents = batch.word.transpose(0,1)
+        label, lengths = batch.pos
+
+        log_potentials = model(sents)
+        
+        dist = LinearChainCRF(log_potentials, lengths=lengths) 
+
+        labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
+                        .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
+        
+        incorrect_edges += (dist.argmax.sum(-1) - labels.sum(-1)).abs().sum() / 2.0
+        total += dist.argmax.sum()        
     
+    print(total, incorrect_edges)   
+    model.train()
+    return incorrect_edges / total 
+
+def trn(train_iter):   
+
     for epoch in range(100):
         model.train()
-#        losses = []
-        for i, batch in enumerate(train_iter):
-            #model.zero_grad()
-            #print(i)
+        losses = []
+        for i, ex in enumerate(train_iter):
             opt.zero_grad() 
             
-            sents = batch.word.transpose(0,1)
-            label, lengths = batch.pos
+            sents = ex.word.transpose(0,1)
+            label, lengths = ex.pos
 
             log_potentials = model(sents)
             # print(log_potentials.shape)
@@ -92,50 +115,27 @@ def trn(train_iter):
 
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
                         .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
-            #print('l', labels.shape) #labels
-            
+            #print('l', labels.shape) #labels         
             #print(dist.log_prob(labels))
 
             loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
             #print(loss)
-
             (-loss).backward()
             opt.step()
-            #losses.append(loss.detach())
-
-        #print(sum(losses))
+            losses.append(loss.detach())
            
-        test_losses = []
-        for i, batch in enumerate(test_iter):
-            model.eval()
+        if epoch % 10 == 1:            
+            print(epoch, -torch.tensor(losses).mean(), sents.shape)
+            losses = []
+            # show_deps(dist.argmax[0])
 
-            sents = batch.word.transpose(0,1)
-            label, lengths = batch.pos
+            val_loss = validate(test_iter)
+            print('val', val_loss)     
 
-            log_potentials = model(sents)
-                    #print(probs.shape)
-                    #for param in model.parameters():
-                    #    print(i, param) 
-            dist = LinearChainCRF(log_potentials, lengths=lengths) 
-            #print('label', label.transpose(0, 1)[0])  
-
-            #print('d', dist.marginals.shape, dist.marginals)
-            #print(dist.argmax.shape) 
-
-            #show_chain(dist.argmax[0])  
-            #plt.show()
-
-            labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
-                        .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
-            #print('l', labels.shape, labels)
-                    
-            #print(dist.log_prob(labels))
-
-            loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
-            test_losses.append(loss.detach())
-            #print(epoch, loss)
-            
-        print(-torch.tensor(test_losses).mean())
+            # incorrect_edges = validate(test_iter)  
+            # writer.add_scalar('incorrect_edges', incorrect_edges, epoch)      
+            # show_deps(gold.argmax[0])
+            # plt.show()
 
 trn(train_iter)
 

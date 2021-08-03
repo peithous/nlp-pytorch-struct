@@ -84,7 +84,7 @@ def validate(val_iter):
 
     print(total_edges, incorrect_edges)   
     model.train()
-    return incorrect_edges 
+    return incorrect_edges / total 
 
 def trn(train_iter, model):
     for epoch in range(100):
@@ -125,8 +125,7 @@ def trn(train_iter, model):
             losses = []
             # show_deps(dist.argmax[0])
             # plt.show()
-            
-        if epoch % 10 == 1:
+
             incorrect_edges = validate(val_iter)        
             writer.add_scalar('incorrect_edges', incorrect_edges, epoch)      
 
