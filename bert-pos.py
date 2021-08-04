@@ -1,3 +1,4 @@
+from torch.utils.tensorboard import SummaryWriter
 import torchtext
 import torch
 import torch.nn as nn
@@ -6,6 +7,7 @@ import torch_struct.data
 import torchtext.data as data
 from pytorch_transformers import *
 
+writer = SummaryWriter(log_dir="bert-pos")
 config = {"bert": "bert-base-cased", "H" : 768, "dropout": 0.2}
 
 class ConllXDataset(data.Dataset):
@@ -95,7 +97,7 @@ def train(train_iter, val_iter, model):
     opt = AdamW(model.parameters(), lr=1e-4, eps=1e-8)
     scheduler = WarmupLinearSchedule(opt, warmup_steps=20, t_total=2500)
 
-    for epoch in range(50):
+    for epoch in range(100):
         model.train()
         losses = []
         for i, ex in enumerate(train_iter):
@@ -118,6 +120,7 @@ def train(train_iter, val_iter, model):
             
             loss = dist.log_prob(labels).sum()
             (-loss).backward()
+            writer.add_scalar('loss', -loss, epoch)
             
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
@@ -129,6 +132,8 @@ def train(train_iter, val_iter, model):
             print(epoch, -torch.tensor(losses).mean(), words.shape)
             val_loss = validate(val_iter)
             print(val_loss)
+            writer.add_scalar('val_loss', val_loss, epoch)      
+
             #wandb.log({"train_loss":-torch.tensor(losses).mean(), 
             #           "val_loss" : val_loss})
     

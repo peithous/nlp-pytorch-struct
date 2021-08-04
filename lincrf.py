@@ -1,3 +1,4 @@
+from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
 import torch
@@ -7,6 +8,8 @@ import torch.optim as optim
 from torch_struct import LinearChainCRF
 #import matplotlib
 import matplotlib.pyplot as plt
+
+writer = SummaryWriter(log_dir="lincrf")
 
 class ConllXDataset(data.Dataset):
     def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
@@ -41,12 +44,13 @@ test = ConllXDataset('wsj.train0.conllx', fields)
 WORD.build_vocab(train) 
 POS.build_vocab(train) 
 
-train_iter = BucketIterator(train, batch_size=10, device='cpu', shuffle=False)
-test_iter = BucketIterator(test, batch_size=10, device='cpu', shuffle=False)
+train_iter = BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
+test_iter = BucketIterator(test, batch_size=20, device='cpu', shuffle=False)
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
 print(C, V)
+#print(len(train), len(test))
 # print(POS.vocab.stoi)
 # print(WORD.vocab.stoi)
 
@@ -66,7 +70,7 @@ class Model(nn.Module):
         return vals
 
 model = Model(V, C)
-opt = optim.SGD(model.parameters(), lr=0.01)
+opt = optim.SGD(model.parameters(), lr=0.1)
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
@@ -86,15 +90,16 @@ def validate(iter):
         labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
                         .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
+        print(labels.shape)
         incorrect_edges += (dist.argmax.sum(-1) - labels.sum(-1)).abs().sum() / 2.0
-        total += dist.argmax.sum()        
+        total += labels.sum()        
     
+
     print(total, incorrect_edges)   
     model.train()
     return incorrect_edges / total 
 
 def trn(train_iter):   
-
     for epoch in range(100):
         model.train()
         losses = []
@@ -121,6 +126,8 @@ def trn(train_iter):
             loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
             #print(loss)
             (-loss).backward()
+            writer.add_scalar('loss', -loss, epoch)
+
             opt.step()
             losses.append(loss.detach())
            
@@ -131,6 +138,7 @@ def trn(train_iter):
 
             val_loss = validate(test_iter)
             print('val', val_loss)     
+            writer.add_scalar('val_loss', val_loss, epoch)      
 
             # incorrect_edges = validate(test_iter)  
             # writer.add_scalar('incorrect_edges', incorrect_edges, epoch)      

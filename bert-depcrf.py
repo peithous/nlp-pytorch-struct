@@ -1,3 +1,4 @@
+from torch.utils.tensorboard import SummaryWriter
 import torchtext
 import torch
 import torch.nn as nn
@@ -7,6 +8,8 @@ import torchtext.data as data
 from pytorch_transformers import AdamW, WarmupLinearSchedule
 from pytorch_transformers import *
 import matplotlib.pyplot as plt
+
+writer = SummaryWriter(log_dir="bert-depcrf")
 
 
 config = {"bert": "bert-base-cased", "H" : 768, "dropout": 0.2
@@ -28,13 +31,15 @@ HEAD = data.RawField(preprocessing= lambda x: [int(i) for i in x],
 HEAD.is_target = True
 
 train = torch_struct.data.ConllXDataset("test0.conllx", (('word', WORD), ('head', HEAD)),
-                    filter_pred=lambda x: 5 < len(x.word[0]) < 40 ) #
+                    ) #filter_pred=lambda x: 5 < len(x.word[0]) < 40
 val = torch_struct.data.ConllXDataset("wsj.train0.conllx", (('word', WORD), ('head', HEAD)),
-                    filter_pred=lambda x: 5 < len(x.word[0]) < 40 ) # filter_pred=lambda x: 5 < len(x.word[0]) < 40
+                    ) # filter_pred=lambda x: 5 < len(x.word[0]) < 40
 
 train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
 #train_iter = torch_struct.data.TokenBucket(train, batch_size=10, device="cpu")
 val_iter = torchtext.data.BucketIterator(val, batch_size=20, device="cpu", shuffle=False)
+
+print(len(val))
 
 H = config["H"]
 class Model(nn.Module):
@@ -87,12 +92,12 @@ def validate(val_iter):
 
     print(total_edges, incorrect_edges)   
     model.train()
-    return gold1
+    return incorrect_edges #/total 
 
 def train(train_iter, val_iter, model):
     opt = AdamW(model.parameters(), lr=1e-4, eps=1e-8)
     scheduler = WarmupLinearSchedule(opt, warmup_steps=20, t_total=2500)
-    for epoch in range(50):
+    for epoch in range(100):
         #print(epoch)
         model.train()
         losses = []
@@ -125,6 +130,7 @@ def train(train_iter, val_iter, model):
 
             loss = log_prob.sum()
             (-loss).backward()
+            writer.add_scalar('loss', -loss, epoch)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
             opt.step()
@@ -135,11 +141,13 @@ def train(train_iter, val_iter, model):
         if epoch % 10 == 1:            
             print(epoch, -torch.tensor(losses).mean(), words.shape)
             losses = []
-#             show_deps(dist.argmax[0])
-#             plt.show()
+#            show_deps(dist.argmax[0])
+#            plt.show()
  
-            gold = validate(val_iter)        
-#             show_deps(gold.argmax[0])
-#             plt.show()
+            incorrect_edges = validate(val_iter)  
+            writer.add_scalar('incorrect_edges', incorrect_edges, epoch)      
+                  
+#            show_deps(gold.argmax[0])
+#            plt.show()
 
 train(train_iter, val_iter, model)

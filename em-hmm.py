@@ -26,7 +26,6 @@ class ConllXDataset(data.Dataset):
             examples.append(data.Example.fromlist(columns, fields))
         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
 
-
 WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>', 
 POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
 fields = (('word', WORD), ('pos', POS), (None, None))
@@ -37,8 +36,8 @@ test = ConllXDataset('wsj.train0.conllx', fields)
 WORD.build_vocab(train) 
 POS.build_vocab(train)
 
-train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
-test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
+train_iter = BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
+test_iter = BucketIterator(test, batch_size=20, device='cpu', shuffle=False)
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
@@ -70,10 +69,13 @@ class Model():
             elif x in self.emssn_prms:
                 self.emssn_prms[x] += 1
 
+model = Model()
+
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
 def trn(train_iter, model):
+    #model.train()    
     for ex in train_iter:
         words = ex.word
         label, lengths = ex.pos
@@ -103,6 +105,9 @@ def trn(train_iter, model):
     #print(transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
     #print(transition)
+    for col in range(C):    
+        if col == POS.vocab.stoi['<eos>']:
+            print('transition', transition[:, col])
 
     #print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
     emission = torch.zeros((C, V)) 
@@ -117,47 +122,59 @@ def trn(train_iter, model):
     losses = []
     for ex in train_iter:
         label, lengths = ex.pos
-        observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
+        observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()  
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
         labels = HMM.struct.to_parts(label.transpose(0, 1) \
                          .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
         
-        print('label', label.transpose(0, 1)[0])  
+        #print('label', label.transpose(0, 1)[0])  
         #print(HMM.struct.from_parts(dist.argmax)[0][0])
-        show_chain(dist.argmax[0])  
-        plt.show()
+        # show_chain(dist.argmax[0])  
+        # plt.show()
+        for col in range(C):    
+            if col == POS.vocab.stoi['<eos>']:
+                print('marginals', dist.marginals[0].sum(-1)[:, col])
+
         loss = dist.log_prob(labels).sum()
         losses.append(loss.detach())
         print(torch.tensor(losses).mean())
 
-    # def test(iters):
-    #     losses = []
-    #     for i, ex in enumerate(iters):   
-    #         #print(i) 
-    #         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
-    #         label, lengths = ex.pos
-    #         #print(lengths)
+    def test(iters):
+        losses = []
+        total = 0
+        incorrect_edges = 0 
+        #model.eval()
+        for i, ex in enumerate(iters):   
+            #print(i) 
+            observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()            
+            label, lengths = ex.pos
+            #print(lengths)
 
-    #         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
-    #         # show_chain(dist.argmax[0])  
-    #         # plt.show()
-    #         #print(dist.marginals.shape)
+            dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
+            # show_chain(dist.argmax[0])  
+            # plt.show()
+            #print(dist.marginals.shape)
 
-    #         labels = HMM.struct.to_parts(label.transpose(0, 1) \
-    #                     .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
-    #         #print('label', label.transpose(0, 1)[0])  
+            labels = HMM.struct.to_parts(label.transpose(0, 1) \
+                        .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
+            #print('label', label.transpose(0, 1)[0])  
+
+            #print(labels.shape)
+            loss = dist.log_prob(labels).sum()
+            losses.append(loss.detach())
+            #print(loss)
+            incorrect_edges += (dist.argmax.sum(-1) - labels.sum(-1)).abs().sum() / 2.0
+            total += labels.sum()        
+
+        print(torch.tensor(losses).mean())        
+        print(total, incorrect_edges)   
+        #model.train()
+        return incorrect_edges / total     
+    #print(losses, len(losses))
+    test(train_iter)
 
 
-    #         loss = dist.log_prob(labels).sum()
-    #         losses.append(loss.detach())
-    #         #print(loss)
-    #     print(torch.tensor(losses).mean())
-
-    # #print(losses, len(losses))
-    # test(test_iter)
-
-model = Model()
 trn(train_iter, model) 
 
 

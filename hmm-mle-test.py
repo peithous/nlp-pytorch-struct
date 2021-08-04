@@ -37,8 +37,8 @@ test = ConllXDataset('wsj.train0.conllx', fields)
 WORD.build_vocab(train) 
 POS.build_vocab(train)
 
-train_iter = BucketIterator(train, batch_size=2, device='cpu', shuffle=False)
-test_iter = BucketIterator(test, batch_size=2, device='cpu', shuffle=False)
+train_iter = BucketIterator(train, batch_size=10, device='cpu', shuffle=False)
+test_iter = BucketIterator(test, batch_size=10, device='cpu', shuffle=False)
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
