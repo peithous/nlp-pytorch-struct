@@ -78,7 +78,7 @@ def trn(train_iter, model):
 
     transition = torch.zeros((C, C)) 
     for x in model.trnsn_prms:
-        transition[x[0], x[1]] = model.trnsn_prms[x] # populate with counts: (pos_n-1, pos_n)
+        transition[x[0], x[1]] = model.trnsn_prms[x] # counts (pos_n-1, pos_n)
     for row in range(transition.shape[0]):
         if row!=POS.vocab.stoi['PUNCT']: # p(z_n | z_n-1 = punct) = 0 
             transition[row, :] = Categorical(transition[row, :]).probs # normalize counts

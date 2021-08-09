@@ -30,11 +30,11 @@ WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>',
 POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-train = ConllXDataset('test0.conllx', fields)
-test = ConllXDataset('wsj.train0.conllx', fields)
+train = ConllXDataset('samIam-data-copies.conllu', fields)
+test = ConllXDataset('samIam-data-copies.conllu', fields)
 
-WORD.build_vocab(train) 
-POS.build_vocab(train)
+WORD.build_vocab(train, min_freq = 5) 
+POS.build_vocab(train, min_freq = 5)
 
 train_iter = BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device='cpu', shuffle=False)
@@ -99,23 +99,24 @@ def trn(train_iter, model):
     transition = torch.zeros((C, C)) 
     for x in model.trnsn_prms:
         transition[x[0], x[1]] = model.trnsn_prms[x] # get(pos_n-1, pos_n) counts
+    print(transition.type())
     for row in range(transition.shape[0]):
-        if row!=POS.vocab.stoi['<eos>'] and row!=POS.vocab.stoi['<unk>']: # row!=POS.vocab.stoi['.'] and p(z_n | z_n-1 = punct) = 0
+        if row!=POS.vocab.stoi['<eos>']: #and row!=POS.vocab.stoi['<unk>']: # row!=POS.vocab.stoi['.'] and p(z_n | z_n-1 = punct) = 0
             transition[row, :] = Categorical(transition[row, :]).probs # normalize counts
     #print(transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
     #print(transition)
-    for col in range(C):    
-        if col == POS.vocab.stoi['<eos>']:
-            print('transition', transition[:, col])
+    # for col in range(C):    
+    #     if col == POS.vocab.stoi['<eos>']:
+    #         print('transition', transition[:, col])
 
     #print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
     emission = torch.zeros((C, V)) 
     for x in model.emssn_prms:  
         emission[x[0], x[1]] = model.emssn_prms[x]
     for row in range(emission.shape[0]):
-        if row!=POS.vocab.stoi['<unk>']: 
-            emission[row, :] = Categorical(emission[row, :]).probs # 
+  #      if row!=POS.vocab.stoi['<unk>']: 
+        emission[row, :] = Categorical(emission[row, :]).probs # 
     emission = emission.transpose(0,1) # p(x_n| z_n)
     #print(emission)
 
@@ -124,6 +125,8 @@ def trn(train_iter, model):
         label, lengths = ex.pos
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()  
 
+        print(transition)
+        #print(transition.type(), emission.type(), init.type())
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
         labels = HMM.struct.to_parts(label.transpose(0, 1) \
                          .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
@@ -132,10 +135,7 @@ def trn(train_iter, model):
         #print(HMM.struct.from_parts(dist.argmax)[0][0])
         # show_chain(dist.argmax[0])  
         # plt.show()
-        for col in range(C):    
-            if col == POS.vocab.stoi['<eos>']:
-                print('marginals', dist.marginals[0].sum(-1)[:, col])
-
+ 
         loss = dist.log_prob(labels).sum()
         losses.append(loss.detach())
         print(torch.tensor(losses).mean())
@@ -152,13 +152,11 @@ def trn(train_iter, model):
             #print(lengths)
 
             dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
-            # show_chain(dist.argmax[0])  
-            # plt.show()
-            #print(dist.marginals.shape)
-
             labels = HMM.struct.to_parts(label.transpose(0, 1) \
                         .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
-            #print('label', label.transpose(0, 1)[0])  
+            # print('label', label.transpose(0, 1)[0])  
+            # show_chain(dist.argmax[0])  
+            # plt.show()
 
             #print(labels.shape)
             loss = dist.log_prob(labels).sum()

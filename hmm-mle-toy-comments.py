@@ -86,8 +86,8 @@ def trn(train_iter, model):
             model.update_a(label[:, b], lengths[b])
             model.update_b(label[:, b], words[:, b], lengths[b])
     # print(model.trnsn_prms)
-    print([(POS.vocab.itos[x[0]], POS.vocab.itos[x[1]], model.trnsn_prms[x]) for x in model.trnsn_prms])
-    print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
+    #print([(POS.vocab.itos[x[0]], POS.vocab.itos[x[1]], model.trnsn_prms[x]) for x in model.trnsn_prms])
+    #print([(POS.vocab.itos[x[0]], WORD.vocab.itos[x[1]], model.emssn_prms[x]) for x in model.emssn_prms])
 
     transition = torch.zeros((C, C)) 
     for x in model.trnsn_prms:
@@ -98,7 +98,7 @@ def trn(train_iter, model):
             transition[row, :] = Categorical(transition[row, :]).probs # normalize counts, don't use logits, since 0 prob and they will be re-normalized in the lin-chain crf hmm
     #print(transition.shape, '\n', transition)
     transition = transition.transpose(0, 1) # p(z_n| z_n-1) 
-    print('transition', '\n', transition)
+    #print('transition', '\n', transition)
 
     init = torch.zeros(C)
     for x in range(C):
@@ -115,7 +115,7 @@ def trn(train_iter, model):
         emission[row, :] = Categorical(emission[row, :]).probs # p(w_i = ·|PUNCT) = 1, (Eisenstein: 148)
     #print(emission)
     emission = emission.transpose(0,1) # p(x_n| z_n)
-    print('emission', '\n', emission)
+    #print('emission', '\n', emission)
 
     for ex in train_iter:
         label, lengths = ex.pos
@@ -124,31 +124,50 @@ def trn(train_iter, model):
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
         # print('train')
 
-        print('label train', label.transpose(0, 1)[0])
+        # print('label train', label.transpose(0, 1)[0])
 
         # print('marginals', dist.marginals[0].sum(-1))
         # print('argmax', dist.argmax[0].sum(-1))
         # print(dist.argmax.shape) # 
         
-        show_chain(dist.argmax[0])
-        plt.show()
+        # show_chain(dist.argmax[0])
+        # plt.show()
 
+    losses = []
+    total = 0
+    incorrect_edges = 0 
     for i, ex in enumerate(test_iter):
         label, lengths = ex.pos
         #print(label.shape)
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()
 
         #print('words', observations[0])
-        print('label test', i, label.transpose(0, 1)[0])
+        print('label test', i, label.transpose(0, 1))
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN
         #print(dist.log_potentials[0].sum(-1))   
+        print('argmax', dist.argmax.sum(-1))
 
-        print(dist.marginals[0].sum(-1))     
-        print(dist.argmax[0].sum(-1))        
+        labels = HMM.struct.to_parts(label.transpose(0, 1) \
+                    .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
 
-        show_chain(dist.argmax[0])
-        plt.show()
+        print('label', labels.sum(-1))
+
+        print(1, (dist.argmax.sum(-1) - labels.sum(-1)).abs())
+
+        loss = dist.log_prob(labels).sum()
+        losses.append(loss.detach())
+        #print(loss)
+        incorrect_edges += (dist.argmax.sum(-1) - labels.sum(-1)).abs().sum() / 2.0
+        total += labels.sum()       
+        print(torch.tensor(losses).mean())        
+        print(total, incorrect_edges)   
+
+        # print(dist.marginals[0].sum(-1))     
+        # print(dist.argmax[0].sum(-1))        
+
+        # show_chain(dist.argmax[0])
+        # plt.show()
 
 model = Model()
 trn(train_iter, model)
