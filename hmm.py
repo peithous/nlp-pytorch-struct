@@ -6,7 +6,7 @@ from torch.distributions import Categorical, Uniform
 from torch_struct import HMM
 import matplotlib.pyplot as plt
 
-writer = SummaryWriter(log_dir="hmm-1hot")
+#writer = SummaryWriter(log_dir="hmm-1hot")
 class ConllXDataset(data.Dataset):
     def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
         examples = []
