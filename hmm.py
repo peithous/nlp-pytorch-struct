@@ -2,7 +2,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
 import torch
-from torch.distributions import Categorical
+from torch.distributions import Categorical, Uniform
 from torch_struct import HMM
 import matplotlib.pyplot as plt
 
@@ -27,7 +27,7 @@ class ConllXDataset(data.Dataset):
 WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>', 
 POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
 fields = (('word', WORD), ('pos', POS), (None, None))
-train = ConllXDataset('wsj.train0.conllx', fields)
+train = ConllXDataset('wsj.train0.conllx', fields) #en_ewt-ud-train.conllu
 #test = ConllXDataset('samIam-data-copies.conllu', fields)
 WORD.build_vocab(train, min_freq = 5) 
 POS.build_vocab(train, min_freq = 5)
@@ -35,7 +35,7 @@ train_iter = BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
 #test_iter = BucketIterator(test, batch_size=20, device='cpu', shuffle=False)
 C = len(POS.vocab)
 V = len(WORD.vocab)
-print('C', C, POS.vocab.itos, '\n', 'V', V, WORD.vocab.itos)
+#print('C', C, POS.vocab.itos, '\n', 'V', V, WORD.vocab.itos)
 
 tags = []
 bigrams = []
@@ -55,7 +55,8 @@ word_tag_counts = torch.stack(word_tag_counts)
 init = torch.zeros(C).long() 
 init.index_put_((tags,), torch.tensor(1), accumulate=True)
 init = torch.div(init.float(), init.sum())
-assert init.sum() == 1 # \sum_C p_c = 1
+#print(init.sum() )
+assert torch.isclose(init.sum(), torch.tensor(1.))# \sum_C p_c = 1
 
 transition = torch.zeros((C, C)).long() 
 transition.index_put_((bigrams[:, 0], bigrams[:, 1]), torch.tensor(1), accumulate=True)
@@ -63,16 +64,23 @@ transition = transition.type(torch.FloatTensor)
 #transition = transition / transition.sum(-1, keepdim=True) 
 #print(transition.type())
 for row in range(transition.shape[0]):
+    if row==POS.vocab.stoi['<unk>']:
+        transition[row, :] = 1/transition.shape[1]
     if row!=POS.vocab.stoi['<eos>']:  
         transition[row, :] = torch.div(transition[row, :].float(), transition[row, :].sum()) #).transpose(0, 1)
         #transition[row, :] = Categorical(transition[row, :].float()).probs # normalize counts
 transition = transition.transpose(0, 1)
-assert transition.sum(0, keepdim=True).sum() == C-1 # for all x \in C-{eos}, \sum_C  p_{x,c} = 1
+#print(transition.sum(0, keepdim=True))
+assert torch.isclose(transition.sum(0, keepdim=True).sum(), torch.tensor(C-1.)) # for all x \in C-{eos}, \sum_C  p_{x,c} = 1
 
 emission = torch.zeros((C, V)).long()
 emission.index_put_((word_tag_counts[:, 0], word_tag_counts[:, 1]), torch.tensor(1), accumulate=True)
 emission = torch.div(emission.float(), emission.sum(-1, keepdim=True)).transpose(0, 1)
-assert emission.sum(0, keepdim=True).sum() == C # for all c \in C, \sum_V p_c (v) = 1
+for col in range(emission.shape[1]):
+    if col==POS.vocab.stoi['<unk>']:
+        emission[:, col] = 1/emission.shape[0]
+#print(emission.sum(0, keepdim=True))
+assert torch.isclose(emission.sum(0, keepdim=True).sum(),torch.tensor(C, dtype=torch.float)) # for all c \in C, \sum_V p_c (v) = 1
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
