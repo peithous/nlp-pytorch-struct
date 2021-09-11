@@ -1,6 +1,38 @@
 import torchtext.data as data
 import torch
 
+class NltkTreebankDataset(data.Dataset):
+    def __init__(self, sent_list, fields, encoding='utf-8', **kwargs):
+        examples = []
+        columns = [[], []]
+
+        for sent in sent_list:
+            for pair in sent:
+                columns[0].append(pair[0])
+                columns[1].append(pair[1])
+
+            examples.append(data.Example.fromlist(columns, fields))
+            columns = [[], []]
+     
+        super(NltkTreebankDataset, self).__init__(examples, fields, **kwargs)
+
+class ConllXDatasetPOS(data.Dataset):
+    def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
+        examples = []
+        columns = [[], []]
+        column_map = {1: 0, 3: 1}
+        with open(path, encoding=encoding) as input_file:
+            for line in input_file:
+                line = line.strip()
+                if line == '':
+                    examples.append(data.Example.fromlist(columns, fields))
+                    columns = [[], []]
+                else:
+                    for i, column in enumerate(line.split(separator)):
+                        if i in column_map:
+                            columns[column_map[i]].append(column)
+            examples.append(data.Example.fromlist(columns, fields))
+        super(ConllXDatasetPOS, self).__init__(examples, fields, **kwargs)
 
 class ConllXDataset(data.Dataset):
     def __init__(self, path, fields, encoding="utf-8", separator="\t", **kwargs):

@@ -1,3 +1,6 @@
+import nltk
+from nltk.corpus import treebank
+
 from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
@@ -9,25 +12,42 @@ from torch_struct import LinearChainCRF
 #import matplotlib
 import matplotlib.pyplot as plt
 
-writer = SummaryWriter(log_dir="lincrf")
+# writer = SummaryWriter(log_dir="lincrf")
 
-class ConllXDataset(data.Dataset):
-    def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
+# class ConllXDataset(data.Dataset):
+#     def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
+#         examples = []
+#         columns = [[], []]
+#         column_map = {1: 0, 3: 1}
+#         with open(path, encoding=encoding) as input_file:
+#             for line in input_file:
+#                 line = line.strip()
+#                 if line == '':
+#                     examples.append(data.Example.fromlist(columns, fields))
+#                     columns = [[], []]
+#                 else:
+#                     for i, column in enumerate(line.split(separator)):
+#                         if i in column_map:
+#                             columns[column_map[i]].append(column)
+#             examples.append(data.Example.fromlist(columns, fields))
+#         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
+
+class NltkTreebankDataset(data.Dataset):
+    def __init__(self, sent_list, fields, encoding='utf-8', **kwargs):
         examples = []
         columns = [[], []]
-        column_map = {1: 0, 3: 1}
-        with open(path, encoding=encoding) as input_file:
-            for line in input_file:
-                line = line.strip()
-                if line == '':
-                    examples.append(data.Example.fromlist(columns, fields))
-                    columns = [[], []]
-                else:
-                    for i, column in enumerate(line.split(separator)):
-                        if i in column_map:
-                            columns[column_map[i]].append(column)
+
+        for sent in sent_list:
+            for pair in sent:
+                columns[0].append(pair[0])
+                columns[1].append(pair[1])
+
             examples.append(data.Example.fromlist(columns, fields))
-        super(ConllXDataset, self).__init__(examples, fields, **kwargs)
+            columns = [[], []]
+                
+        super(NltkTreebankDataset, self).__init__(examples, fields, **kwargs)
+
+sents = treebank.tagged_sents()[:20]
 
 # if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
 # add eos bc '.' might not always be the eos 
@@ -37,9 +57,11 @@ POS = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None, include_
 
 fields = (('word', WORD), ('pos', POS), (None, None))
 
-train = ConllXDataset('test0.conllx', fields)
-#train = ConllXDataset('samIam.conllu', fields)
-test = ConllXDataset('wsj.train0.conllx', fields)
+# train = ConllXDataset('test0.conllx', fields)
+# #train = ConllXDataset('samIam.conllu', fields)
+# test = ConllXDataset('wsj.train0.conllx', fields)
+train = NltkTreebankDataset(sents, fields) #en_ewt-ud-train.conllu
+test = NltkTreebankDataset(sents, fields) #en_ewt-ud-train.conllu
 
 WORD.build_vocab(train) 
 POS.build_vocab(train) 
@@ -93,9 +115,10 @@ def validate(iter):
         print(labels.shape)
         incorrect_edges += (dist.argmax.sum(-1) - labels.sum(-1)).abs().sum() / 2.0
         total += labels.sum()        
-    
 
-    print(total, incorrect_edges)   
+        loss = dist.log_prob(labels).sum()
+
+    print(total, incorrect_edges, loss)   
     model.train()
     return incorrect_edges / total 
 
@@ -126,7 +149,7 @@ def trn(train_iter):
             loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
             #print(loss)
             (-loss).backward()
-            writer.add_scalar('loss', -loss, epoch)
+            # writer.add_scalar('loss', -loss, epoch)
 
             opt.step()
             losses.append(loss.detach())
@@ -137,8 +160,8 @@ def trn(train_iter):
             # show_deps(dist.argmax[0])
 
             val_loss = validate(test_iter)
-            print('val', val_loss)     
-            writer.add_scalar('val_loss', val_loss, epoch)      
+            # print('val', val_loss)     
+            # writer.add_scalar('val_loss', val_loss, epoch)      
 
             # incorrect_edges = validate(test_iter)  
             # writer.add_scalar('incorrect_edges', incorrect_edges, epoch)      

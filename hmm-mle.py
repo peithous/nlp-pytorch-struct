@@ -5,82 +5,72 @@ import torch
 from torch.distributions import Categorical, Uniform
 from torch_struct import HMM
 import matplotlib.pyplot as plt
-
+from torch_struct.data.trees import ConllXDatasetPOS
 #writer = SummaryWriter(log_dir="hmm-1hot")
-class ConllXDataset(data.Dataset):
-    def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
-        examples = []
-        columns = [[], []]
-        column_map = {1: 0, 3: 1}
-        with open(path, encoding=encoding) as input_file:
-            for line in input_file:
-                line = line.strip()
-                if line == '':
-                    examples.append(data.Example.fromlist(columns, fields))
-                    columns = [[], []]
-                else:
-                    for i, column in enumerate(line.split(separator)):
-                        if i in column_map:
-                            columns[column_map[i]].append(column)
-            examples.append(data.Example.fromlist(columns, fields))
-        super(ConllXDataset, self).__init__(examples, fields, **kwargs)
+
 WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>', 
 POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
+
 fields = (('word', WORD), ('pos', POS), (None, None))
-train = ConllXDataset('wsj.train0.conllx', fields) #en_ewt-ud-train.conllu
-#test = ConllXDataset('samIam-data-copies.conllu', fields)
-WORD.build_vocab(train, min_freq = 5) 
-POS.build_vocab(train, min_freq = 5)
-train_iter = BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
-#test_iter = BucketIterator(test, batch_size=20, device='cpu', shuffle=False)
+train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
+                filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
+test = ConllXDatasetPOS('data/test0.conllx', fields)
+print('total train sentences', len(train))
+
+WORD.build_vocab(train) # min_freq = 5
+POS.build_vocab(train)
+train_iter = BucketIterator(train, batch_size=10, device='cpu', shuffle=False)
+test_iter = BucketIterator(test, batch_size=10, device='cpu', shuffle=False)
+
 C = len(POS.vocab)
 V = len(WORD.vocab)
-#print('C', C, POS.vocab.itos, '\n', 'V', V, WORD.vocab.itos)
+print('C', C, POS.vocab.itos, '\n', 'V', V, WORD.vocab.itos)
 
-tags = []
-bigrams = []
-word_tag_counts = []
+# estimate mle's 
+tags = [] # prior
+bigrams = [] # transition
+word_tag_counts = [] # enission
 for ex in train_iter:
+#    print(ex.pos)
     words = ex.word
     label, lengths = ex.pos
     for batch in range(label.shape[1]):
-        bigrams.append(label[:lengths[batch], batch].unfold(0, 2, 1))
+#        print(' '.join([WORD.vocab.itos[i] for i in words[:lengths[batch], batch]]))        
         tags.append(label[:lengths[batch], batch])
+        bigrams.append(label[:lengths[batch], batch].unfold(0, 2, 1)) #dimension, size, step      
         for i, t in enumerate(label[:lengths[batch], batch]):
             word_tag_counts.append(torch.tensor((t.item(), words[i, batch].item())))
 tags = torch.cat(tags, 0)
 bigrams = torch.cat(bigrams, 0)
 word_tag_counts = torch.stack(word_tag_counts)
 
+# priors tensor
 init = torch.zeros(C).long() 
 init.index_put_((tags,), torch.tensor(1), accumulate=True)
-init = torch.div(init.float(), init.sum())
-#print(init.sum() )
+assert init[POS.vocab.stoi['<eos>']] == len(train)
+init = init.float() / init.sum()
 assert torch.isclose(init.sum(), torch.tensor(1.))# \sum_C p_c = 1
+init = init.log().long().float()
 
+# transition tensor
 transition = torch.zeros((C, C)).long() 
+transition[0, :] = 1 # p(c_i | c_i-1 = unk) = 1/|C| 
 transition.index_put_((bigrams[:, 0], bigrams[:, 1]), torch.tensor(1), accumulate=True)
-transition = transition.type(torch.FloatTensor) 
-#transition = transition / transition.sum(-1, keepdim=True) 
-#print(transition.type())
-for row in range(transition.shape[0]):
-    if row==POS.vocab.stoi['<unk>']:
-        transition[row, :] = 1/transition.shape[1]
-    if row!=POS.vocab.stoi['<eos>']:  
-        transition[row, :] = torch.div(transition[row, :].float(), transition[row, :].sum()) #).transpose(0, 1)
-        #transition[row, :] = Categorical(transition[row, :].float()).probs # normalize counts
-transition = transition.transpose(0, 1)
-#print(transition.sum(0, keepdim=True))
-assert torch.isclose(transition.sum(0, keepdim=True).sum(), torch.tensor(C-1.)) # for all x \in C-{eos}, \sum_C  p_{x,c} = 1
+transition = (transition.float() / transition.sum(-1, keepdim=True)).transpose(0, 1) 
+for tminus1 in range(transition.shape[1]): # Q1: is there a better way to correct the nan's?
+    if tminus1==POS.vocab.stoi['<eos>']: # p(. | eos) = 0
+        transition[:, tminus1] = 0 
+assert torch.isclose(transition.sum(0, keepdim=True).sum(), torch.tensor(C-1.)) # for all x \in C-{eos}, \sum_C  p(c, x) = 1
+transition = transition.log().long().float()
+#print(transition[POS.vocab.stoi['<unk>'], :]) # Q2: p(c_i = unk | c_i-1 ) != 1/|C| 
 
+# emission tensor
 emission = torch.zeros((C, V)).long()
+emission[0, :] = 1 # p(v_i | c_i-1 = unk) = 1/|V| 
 emission.index_put_((word_tag_counts[:, 0], word_tag_counts[:, 1]), torch.tensor(1), accumulate=True)
-emission = torch.div(emission.float(), emission.sum(-1, keepdim=True)).transpose(0, 1)
-for col in range(emission.shape[1]):
-    if col==POS.vocab.stoi['<unk>']:
-        emission[:, col] = 1/emission.shape[0]
-#print(emission.sum(0, keepdim=True))
-assert torch.isclose(emission.sum(0, keepdim=True).sum(),torch.tensor(C, dtype=torch.float)) # for all c \in C, \sum_V p_c (v) = 1
+emission = (emission.float() / emission.sum(-1, keepdim=True)).transpose(0, 1)
+assert torch.isclose(emission.sum(0, keepdim=True).sum(), torch.tensor(C, dtype=torch.float)) # for all c \in C, \sum_V p_c (v) = 1
+emission = emission.log().long().float()
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
@@ -91,10 +81,10 @@ def trn(train_iter):
         label, lengths = ex.pos
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()  
 
-        dist = HMM(transition, emission, init, observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
+        dist = HMM(transition.type(torch.FloatTensor), emission.type(torch.FloatTensor) , init.type(torch.FloatTensor) , observations, lengths=lengths) # CxC, VxC, C, bxN -> b x (N-1) x C x C 
         labels = HMM.struct.to_parts(label.transpose(0, 1) \
                          .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) 
-        #print(HMM.struct.from_parts(dist.argmax)[0][0])
+        # print(HMM.struct.from_parts(dist.argmax)[0][0])
 
         # print('label', label.transpose(0, 1)[0])  
         # show_chain(dist.argmax[0])  
@@ -130,7 +120,7 @@ def trn(train_iter):
         #model.train()
         return incorrect_edges / total     
     #print(losses, len(losses))
-    test(train_iter)
+    test(test_iter)
 
 trn(train_iter) 
 
