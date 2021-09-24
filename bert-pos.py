@@ -7,56 +7,22 @@ import torch_struct.data
 import torchtext.data as data
 from pytorch_transformers import *
 from torch_struct.data.trees import ConllXDatasetPOS
+#writer = SummaryWriter(log_dir="bert-pos")
 
-
-writer = SummaryWriter(log_dir="bert-pos")
 config = {"bert": "bert-base-cased", "H" : 768, "dropout": 0.2}
-
-# class ConllXDataset(data.Dataset):
-#     def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
-#         examples = []
-#         columns = [[], []]
-#         column_map = {1: 0, 3: 1}
-#         with open(path, encoding=encoding) as input_file:
-#             for line in input_file:
-#                 line = line.strip()
-#                 if line == '':
-#                     examples.append(data.Example.fromlist(columns, fields))
-#                     columns = [[], []]
-#                 else:
-#                     for i, column in enumerate(line.split(separator)):
-#                         if i in column_map:
-#                             columns[column_map[i]].append(column)
-#             examples.append(data.Example.fromlist(columns, fields))
-#         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
-
-
-sents = treebank.tagged_sents()[:20]
 
 model_class, tokenizer_class, pretrained_weights = BertModel, BertTokenizer, config["bert"]
 tokenizer = tokenizer_class.from_pretrained(pretrained_weights)    
 WORD = torch_struct.data.SubTokenizedField(tokenizer)
 UD_TAG = torchtext.data.Field(init_token="<bos>", eos_token="<eos>", include_lengths=True)
 
-# WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>', 
-# POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
-fields = (('word', WORD), ('udtag', UD_TAG), (None, None))
-train = NltkTreebankDataset(sents, fields) #en_ewt-ud-train.conllu
-val = NltkTreebankDataset(sents, fields) #en_ewt-ud-train.conllu
-
-# #test = ConllXDataset('samIam-data-copies.conllu', fields)
-# WORD.build_vocab(train, min_freq = 5) 
-# POS.build_vocab(train, min_freq = 5)
-# train_iter = BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
-# #test_iter = BucketIterator(test, batch_size=20, device='cpu', shuffle=False)
-
 # train, val, test = torchtext.datasets.UDPOS.splits(
 #     fields=(('word', WORD), ('udtag', UD_TAG), (None, None)), 
 #     filter_pred=lambda ex: len(ex.word[0]) < 200
 # )
-# fields=(('word', WORD), ('udtag', UD_TAG), (None, None))
-# train = ConllXDataset('test0.conllx', fields)
-# val = ConllXDataset('wsj.train0.conllx', fields)
+fields=(('word', WORD), ('udtag', UD_TAG), (None, None))
+train = ConllXDataset('wsj.test0.conllx', fields)
+val = ConllXDataset('wsj.train0.conllx', fields)
 
 #WORD.build_vocab(train.word, min_freq=3)
 UD_TAG.build_vocab(train.udtag)
@@ -64,9 +30,6 @@ UD_TAG.build_vocab(train.udtag)
 #train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
 train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
 val_iter = torchtext.data.BucketIterator(val, batch_size=20, device="cpu", shuffle=False)
-
-
-
 
 C = len(UD_TAG.vocab)
 

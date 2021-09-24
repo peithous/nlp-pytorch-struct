@@ -1,6 +1,3 @@
-import nltk
-from nltk.corpus import treebank
-
 from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
@@ -11,57 +8,18 @@ import torch.optim as optim
 from torch_struct import LinearChainCRF
 #import matplotlib
 import matplotlib.pyplot as plt
-
+from torch_struct.data import ConllXDatasetPOS
 # writer = SummaryWriter(log_dir="lincrf")
 
-# class ConllXDataset(data.Dataset):
-#     def __init__(self, path, fields, encoding='utf-8', separator='\t', **kwargs):
-#         examples = []
-#         columns = [[], []]
-#         column_map = {1: 0, 3: 1}
-#         with open(path, encoding=encoding) as input_file:
-#             for line in input_file:
-#                 line = line.strip()
-#                 if line == '':
-#                     examples.append(data.Example.fromlist(columns, fields))
-#                     columns = [[], []]
-#                 else:
-#                     for i, column in enumerate(line.split(separator)):
-#                         if i in column_map:
-#                             columns[column_map[i]].append(column)
-#             examples.append(data.Example.fromlist(columns, fields))
-#         super(ConllXDataset, self).__init__(examples, fields, **kwargs)
-
-class NltkTreebankDataset(data.Dataset):
-    def __init__(self, sent_list, fields, encoding='utf-8', **kwargs):
-        examples = []
-        columns = [[], []]
-
-        for sent in sent_list:
-            for pair in sent:
-                columns[0].append(pair[0])
-                columns[1].append(pair[1])
-
-            examples.append(data.Example.fromlist(columns, fields))
-            columns = [[], []]
-                
-        super(NltkTreebankDataset, self).__init__(examples, fields, **kwargs)
-
-sents = treebank.tagged_sents()[:20]
-
-# if pad is included in class vocab, then p (z_t = pad| z_t-1) > 0 
-# add eos bc '.' might not always be the eos 
-WORD = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None) 
-POS = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None, include_lengths=True) #
-
+WORD = data.Field(eos_token='<eos>', pad_token=None) # add eos bc '.' might not always be the eos 
+POS = data.Field(eos_token='<eos>', pad_token=None, include_lengths=True) # init_token='<bos>',
 
 fields = (('word', WORD), ('pos', POS), (None, None))
-
-# train = ConllXDataset('test0.conllx', fields)
-# #train = ConllXDataset('samIam.conllu', fields)
-# test = ConllXDataset('wsj.train0.conllx', fields)
-train = NltkTreebankDataset(sents, fields) #en_ewt-ud-train.conllu
-test = NltkTreebankDataset(sents, fields) #en_ewt-ud-train.conllu
+train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
+                filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
+test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
+print('total train sentences', len(train))
+print('total test sentences', len(test))
 
 WORD.build_vocab(train) 
 POS.build_vocab(train) 
@@ -79,7 +37,9 @@ print(C, V)
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
         super().__init__()
-        self.embedding = nn.Embedding.from_pretrained(torch.eye(voc_size).type(torch.FloatTensor), freeze=True) #one hot 
+        self.embedding = nn.Embedding.from_pretrained(
+                torch.eye(voc_size).type(torch.FloatTensor), 
+                freeze=True) #one hot 
         self.linear = nn.Linear(voc_size, num_pos_tags) # batch x C x V -> batch x C_t x C_t-1
         self.transition = nn.Linear(num_pos_tags, num_pos_tags)
         
@@ -98,6 +58,7 @@ def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
 def validate(iter):
+    losses = []
     incorrect_edges = 0
     total = 0 
     model.eval()
@@ -105,37 +66,40 @@ def validate(iter):
         sents = batch.word.transpose(0,1)
         label, lengths = batch.pos
 
-        log_potentials = model(sents)
+        scores = model(sents)
         
-        dist = LinearChainCRF(log_potentials, lengths=lengths) 
+        dist = LinearChainCRF(scores, lengths=lengths) 
 
-        labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
-                        .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
+        labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
+                .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
-        print(labels.shape)
+        # print(labels.shape)
         incorrect_edges += (dist.argmax.sum(-1) - labels.sum(-1)).abs().sum() / 2.0
         total += labels.sum()        
 
         loss = dist.log_prob(labels).sum()
+        losses.append(loss.detach()/label.shape[1])
 
-    print(total, incorrect_edges, loss)   
+    print('inaccurate', incorrect_edges / total)   
     model.train()
-    return incorrect_edges / total 
+    return torch.tensor(losses).mean(), incorrect_edges / total
 
 def trn(train_iter):   
     for epoch in range(100):
         model.train()
         losses = []
+        val_losses = []
+        val_inacc = []
         for i, ex in enumerate(train_iter):
             opt.zero_grad() 
             
             sents = ex.word.transpose(0,1)
             label, lengths = ex.pos
 
-            log_potentials = model(sents)
-            # print(log_potentials.shape)
+            scores = model(sents)
+            # print(scores.shape)
 
-            dist = LinearChainCRF(log_potentials, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
+            dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
             #print('d', dist.marginals.shape, dist.marginals)
             #print(dist.argmax.shape) 
             #show_chain(dist.argmax[0])
@@ -152,15 +116,19 @@ def trn(train_iter):
             # writer.add_scalar('loss', -loss, epoch)
 
             opt.step()
-            losses.append(loss.detach())
+            losses.append(loss.detach()/label.shape[1])
            
         if epoch % 10 == 1:            
-            print(epoch, -torch.tensor(losses).mean(), sents.shape)
-            losses = []
+            print(epoch, torch.tensor(losses).mean())
+            # losses = []
             # show_deps(dist.argmax[0])
+            val_loss, val_acc = validate(test_iter)
+            val_losses.append(val_loss)
+            val_inacc.append(val_acc)
+        print('val', torch.tensor(val_losses).mean()) 
+        print('inac', val_inacc) 
+        
 
-            val_loss = validate(test_iter)
-            # print('val', val_loss)     
             # writer.add_scalar('val_loss', val_loss, epoch)      
 
             # incorrect_edges = validate(test_iter)  
