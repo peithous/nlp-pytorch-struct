@@ -1,3 +1,4 @@
+import time
 from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
@@ -6,20 +7,22 @@ from torch_struct import HMM
 import matplotlib.pyplot as plt
 from torch_struct.data import ConllXDatasetPOS
 
+start_time = time.time()
+
 WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>', 
 POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
 
 fields = (('word', WORD), ('pos', POS), (None, None))
-train = ConllXDatasetPOS('data/wsj.train.conllx', fields, 
+train = ConllXDatasetPOS('temp/wsj.train.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
-test = ConllXDatasetPOS('data/wsj.test.conllx', fields)
+test = ConllXDatasetPOS('temp/wsj.test.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
 WORD.build_vocab(train) # min_freq = 5
 POS.build_vocab(train)
-train_iter = BucketIterator(train, batch_size=50, device='cpu', shuffle=False)
-test_iter = BucketIterator(test, batch_size=50, device='cpu', shuffle=False)
+train_iter = BucketIterator(train, batch_size=100, device='cpu', shuffle=False)
+test_iter = BucketIterator(test, batch_size=100, device='cpu', shuffle=False)
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
@@ -88,6 +91,7 @@ def test(iters):
         # plt.show()
 
         loglik = dist.log_prob(labels).sum()
+        # print(loglik, label.shape[1])
         losses.append(loglik.detach()/label.shape[1])
 
         incorrect_edges += (dist.argmax.sum(-1) - labels.sum(-1)).abs().sum() / 2.0
@@ -99,5 +103,6 @@ def test(iters):
 print('train-log-lik', test(train_iter))
 print('test-log-lik', test(test_iter))
 
+print("--- %s seconds ---" % (time.time() - start_time))
 
 

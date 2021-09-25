@@ -1,3 +1,4 @@
+import time
 from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
@@ -9,6 +10,8 @@ from torch_struct import LinearChainCRF
 #import matplotlib
 import matplotlib.pyplot as plt
 from torch_struct.data import ConllXDatasetPOS
+
+start_time = time.time()
 # writer = SummaryWriter(log_dir="lincrf")
 
 WORD = data.Field(eos_token='<eos>', pad_token=None) # add eos bc '.' might not always be the eos 
@@ -16,30 +19,27 @@ POS = data.Field(eos_token='<eos>', pad_token=None, include_lengths=True) # init
 
 fields = (('word', WORD), ('pos', POS), (None, None))
 train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
-                filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
-test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
+                filter_pred=lambda x: len(x.word) < 10) #en_ewt-ud-train.conllu
+test = ConllXDatasetPOS('data/wsj.test0.conllx', fields, 
+                filter_pred=lambda x: len(x.word) < 10)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
 WORD.build_vocab(train) 
 POS.build_vocab(train) 
 
-train_iter = BucketIterator(train, batch_size=20, device='cpu', shuffle=False)
-test_iter = BucketIterator(test, batch_size=20, device='cpu', shuffle=False)
+train_iter = BucketIterator(train, batch_size=100, device='cpu', shuffle=False)
+test_iter = BucketIterator(test, batch_size=100, device='cpu', shuffle=False)
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
-print(C, V)
-#print(len(train), len(test))
-# print(POS.vocab.stoi)
-# print(WORD.vocab.stoi)
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
         super().__init__()
         self.embedding = nn.Embedding.from_pretrained(
-                torch.eye(voc_size).type(torch.FloatTensor), 
-                freeze=True) #one hot 
+                torch.eye(voc_size).type(torch.FloatTensor), # 1-hot 
+                freeze=True) 
         self.linear = nn.Linear(voc_size, num_pos_tags) # batch x C x V -> batch x C_t x C_t-1
         self.transition = nn.Linear(num_pos_tags, num_pos_tags)
         
@@ -52,7 +52,7 @@ class Model(nn.Module):
         return vals
 
 model = Model(V, C)
-opt = optim.SGD(model.parameters(), lr=0.1)
+opt = optim.SGD(model.parameters(), lr=0.2)
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
@@ -65,11 +65,8 @@ def validate(iter):
     for i, batch in enumerate(test_iter):
         sents = batch.word.transpose(0,1)
         label, lengths = batch.pos
-
-        scores = model(sents)
-        
+        scores = model(sents)   
         dist = LinearChainCRF(scores, lengths=lengths) 
-
         labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
@@ -78,18 +75,21 @@ def validate(iter):
         total += labels.sum()        
 
         loss = dist.log_prob(labels).sum()
+        # print(loss)
         losses.append(loss.detach()/label.shape[1])
-
-    print('inaccurate', incorrect_edges / total)   
+    
+    acc = incorrect_edges / total
+    print('test-loss', torch.tensor(losses).mean())   
     model.train()
-    return torch.tensor(losses).mean(), incorrect_edges / total
+    return acc
 
 def trn(train_iter):   
+    losses = []
+    val_inacc = []
+    
     for epoch in range(100):
         model.train()
-        losses = []
-        val_losses = []
-        val_inacc = []
+        epoch_loss = []
         for i, ex in enumerate(train_iter):
             opt.zero_grad() 
             
@@ -97,7 +97,6 @@ def trn(train_iter):
             label, lengths = ex.pos
 
             scores = model(sents)
-            # print(scores.shape)
 
             dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
             #print('d', dist.marginals.shape, dist.marginals)
@@ -106,7 +105,7 @@ def trn(train_iter):
             #plt.show()
 
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
-                        .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
+                    .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
             #print('l', labels.shape) #labels         
             #print(dist.log_prob(labels))
 
@@ -114,28 +113,28 @@ def trn(train_iter):
             #print(loss)
             (-loss).backward()
             # writer.add_scalar('loss', -loss, epoch)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
             opt.step()
-            losses.append(loss.detach()/label.shape[1])
+            epoch_loss.append(loss.detach()/label.shape[1])
+
+        losses.append(torch.tensor(epoch_loss).mean())
            
         if epoch % 10 == 1:            
-            print(epoch, torch.tensor(losses).mean())
-            # losses = []
-            # show_deps(dist.argmax[0])
-            val_loss, val_acc = validate(test_iter)
-            val_losses.append(val_loss)
-            val_inacc.append(val_acc)
-        print('val', torch.tensor(val_losses).mean()) 
-        print('inac', val_inacc) 
-        
+            print(epoch, 'train-loss', losses[-1])
+            val_acc = validate(test_iter)
+            print(val_acc)
+            val_inacc.append(val_acc.item())
+            # print('inac', val_inacc) 
 
             # writer.add_scalar('val_loss', val_loss, epoch)      
 
-            # incorrect_edges = validate(test_iter)  
-            # writer.add_scalar('incorrect_edges', incorrect_edges, epoch)      
-            # show_deps(gold.argmax[0])
-            # plt.show()
+    plt.plot(losses)
+    plt.plot(val_inacc)
 
 trn(train_iter)
+
+print("--- %s seconds ---" % (time.time() - start_time))
+
 
 
