@@ -1,6 +1,6 @@
 ### POS Prediction
 wsj data splits from: `git clone -q http://github.com/srush/temp`  
-- remove empty lines at the end of `.conllx` files
+-[NB] Remove empty lines at the end of `.conllx` files
 
 #### HMM 1-hot MLE: 
 `python hmm-mle.py`  

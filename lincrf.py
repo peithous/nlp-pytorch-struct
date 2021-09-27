@@ -12,15 +12,16 @@ import matplotlib.pyplot as plt
 from torch_struct.data import ConllXDatasetPOS
 
 start_time = time.time()
+device='cpu'
 # writer = SummaryWriter(log_dir="lincrf")
 
 WORD = data.Field(eos_token='<eos>', pad_token=None) # add eos bc '.' might not always be the eos 
 POS = data.Field(eos_token='<eos>', pad_token=None, include_lengths=True) # init_token='<bos>',
 
 fields = (('word', WORD), ('pos', POS), (None, None))
-train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
+train = ConllXDatasetPOS('data/wsj.train.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 10) #en_ewt-ud-train.conllu
-test = ConllXDatasetPOS('data/wsj.test0.conllx', fields, 
+test = ConllXDatasetPOS('data/wsj.test.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 10)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
@@ -28,8 +29,8 @@ print('total test sentences', len(test))
 WORD.build_vocab(train) 
 POS.build_vocab(train) 
 
-train_iter = BucketIterator(train, batch_size=100, device='cpu', shuffle=False)
-test_iter = BucketIterator(test, batch_size=100, device='cpu', shuffle=False)
+train_iter = BucketIterator(train, batch_size=100, device=device, shuffle=False)
+test_iter = BucketIterator(test, batch_size=100, device=device, shuffle=False)
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
