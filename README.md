@@ -1,6 +1,6 @@
 ### POS Prediction
 wsj data splits from: `git clone -q http://github.com/srush/temp`  
-- [NB] Remove empty lines at the end of `.conllx` files
+- NB: Remove empty lines at the end of `.conllx` files
 
 - [(Wu and Dredze, 2019)] found [POS tagging] accuracies over 97% across 15 languages from the Universal Dependency (UD) treebank. Accuracies on various English treebanks are also 97% (no matter the algorithm; HMMs, CRFs, BERT perform similarly). This 97% number is also about the human performance on this task, at least for English (Manning, 2011)." (Jurasky, 3rd ed. , 8.2)  
 
