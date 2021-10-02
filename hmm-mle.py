@@ -14,9 +14,9 @@ WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>',
 POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
 
 fields = (('word', WORD), ('pos', POS), (None, None))
-train = ConllXDatasetPOS('data/sam.conllx', fields, 
+train = ConllXDatasetPOS('data/wsj.train.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
-test = ConllXDatasetPOS('data/samtest.conllx', fields)
+test = ConllXDatasetPOS('data/wsj.test.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
@@ -101,7 +101,7 @@ def test(iters):
     print('inaccurate', incorrect_edges / total) 
     return torch.tensor(losses).mean()
 
-print('train-log-lik', test(train_iter))
+# print('train-log-lik', test(train_iter))
 print('test-log-lik', test(test_iter))
 
 print("--- %s seconds ---" % (time.time() - start_time))

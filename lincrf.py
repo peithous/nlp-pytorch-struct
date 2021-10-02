@@ -1,5 +1,6 @@
 import time
 from torch.utils.tensorboard import SummaryWriter
+# from torchtext.legacy import data
 import torchtext.data as data
 from torchtext.data import BucketIterator
 import torch
