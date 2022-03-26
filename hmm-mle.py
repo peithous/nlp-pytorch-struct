@@ -14,19 +14,22 @@ WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>',
 POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
 
 fields = (('word', WORD), ('pos', POS), (None, None))
-train = ConllXDatasetPOS('data/wsj.train.conllx', fields, 
+train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
-test = ConllXDatasetPOS('data/wsj.test.conllx', fields)
+test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
 WORD.build_vocab(train) # min_freq = 5
 POS.build_vocab(train)
-train_iter = BucketIterator(train, batch_size=100, device=device, shuffle=False)
-test_iter = BucketIterator(test, batch_size=100, device=device, shuffle=False)
+train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
+test_iter = BucketIterator(test, batch_size=20, device=device, shuffle=False)
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
+
+t0 = time.time() - start_time
+print(t0)
 
 # counts for mle's 
 tags = [] # prior
@@ -73,13 +76,14 @@ emission = emission.log()
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
+print('t1', time.time() - start_time)
+
 def test(iters):
     losses = []
     total = 0
     incorrect_edges = 0 
     #model.eval()
-    for i, ex in enumerate(iters):   
-        
+    for i, ex in enumerate(iters):      
         observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()            
         label, lengths = ex.pos
 
