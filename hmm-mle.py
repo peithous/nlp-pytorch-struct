@@ -103,7 +103,7 @@ def test(iters):
         total += labels.sum()        
 
     print('inaccurate', incorrect_edges / total) 
-    return torch.tensor(losses).mean()
+    return -torch.tensor(losses).mean()
 
 # print('train-log-lik', test(train_iter))
 print('test-log-lik', test(test_iter))

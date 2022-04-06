@@ -29,8 +29,8 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train) 
-POS.build_vocab(train, max_size=20) 
+WORD.build_vocab(train, min_freq = 10) # 
+POS.build_vocab(train, min_freq = 10, max_size=7) 
 
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle =False)
@@ -61,7 +61,9 @@ class Model(nn.Module):
         return vals
 
 model = Model(V, C)
-opt = optim.SGD(model.parameters(), lr=0.1)
+# opt = optim.SGD(model.parameters(), lr=0.1)
+opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.1,  ) # weight_decay=0.1
+
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
@@ -94,7 +96,7 @@ def trn(train_iter):
     losses = []
     test_acc = []
     
-    for epoch in range(22):
+    for epoch in range(202):
         t0 = time.time()
 
         model.train()
@@ -106,21 +108,29 @@ def trn(train_iter):
            
             scores = model(sents)
             dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
+            
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
                     .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
+            print(labels)
             loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
-            (-loss).backward()
+            # (-loss).backward()
+
+# direct max of log marginal lik 
+            loss1 = dist.partition.sum()
+            (loss1).backward()
+
             # writer.add_scalar('loss', -loss, epoch)
-            t1 = time.time() - t0
+
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            # opt.step()
             epoch_loss.append(loss.detach()/label.shape[1])
-        
-        opt.step()
-        losses.append(-torch.tensor(epoch_loss).mean())
 
-        print('t1', epoch, t1, -torch.tensor(epoch_loss).mean())
+        opt.step()
+        # print("--- %s seconds ---" % (time.time() - t0))
+
+        losses.append(torch.tensor(epoch_loss).mean())
+
+        # print('t1', epoch, t1, -torch.tensor(epoch_loss).mean())
 
         if epoch % 10 == 1:            
             print(epoch, 'train-loss', losses[-1])
