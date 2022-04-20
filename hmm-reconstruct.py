@@ -22,18 +22,14 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train, min_freq = 5,) # 
-POS.build_vocab(train, min_freq = 5, max_size=7)
+WORD.build_vocab(train,  min_freq = 5,) #  min_freq = 5,
+POS.build_vocab(train,  max_size=7)
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle=False)
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
-print(C, V)
-
-# emission = torch.rand((V, C)).log()
-# transition = torch.rand((C, C)).log()
-# init = torch.rand(C).log()
+# print(C, V)
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
@@ -41,13 +37,15 @@ class Model(nn.Module):
         self.emission = nn.Linear(voc_size, num_pos_tags) 
         self.transition = nn.Linear(num_pos_tags, num_pos_tags)
         self.init = nn.Linear(num_pos_tags, 1)
-        
+        self.rec_emission = nn.Linear(voc_size, num_pos_tags) 
+
     def forward(self):
-        return self.emission.weight.transpose(0, 1), self.transition.weight, self.init.weight.transpose(0, 1)
+        return self.emission.weight.transpose(0, 1), self.transition.weight, \
+                    self.init.weight.transpose(0, 1), self.rec_emission.weight.transpose(0, 1)
 
 model = Model(V, C)
-opt = optim.SGD(model.parameters(), lr=0.1)
-# opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1
+# opt = optim.SGD(model.parameters(), lr=0.1)
+opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1
 
 def validate(iter):
     losses = []
@@ -58,7 +56,7 @@ def validate(iter):
         observations = torch.LongTensor(batch.word).transpose(0, 1).contiguous()            
         label, lengths = batch.pos
         
-        emission, transition, init = model.forward()
+        emission, transition, init, _ = model.forward()
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) 
         argmax = dist.argmax
@@ -92,22 +90,35 @@ def trn(train_iter):
             label, lengths = ex.pos
            
             # scores = model(sents)
-            emission, transition, init = model.forward()
+            emission, transition, init, rec_emission = model.forward()
             dist = HMM(transition, emission, init, observations, lengths=lengths) 
             
-            labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
-                    .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
-            # print(labels)
-            loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
-            (-loss).backward()
+            # labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
+            #         .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
+            # # print(labels)
+            # loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
+            # (-loss).backward()
 
 # direct max of log marginal lik 
-            # loss1 = dist.partition.sum()
+            z = dist.partition.sum()
             # (loss1).backward()
+
+            # print(dist.log_potentials.shape)
+            # print(rec_emission.shape)
+           
+            batch, N = observations.shape
+            rec_obs = rec_emission[observations.view(batch*N), :]
+            u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
+            u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
+
+            u = LinearChainCRF(u_scores, lengths=lengths).partition
+
+            loss = -u + z
+            loss.sum().backward()
 
             # writer.add_scalar('loss', -loss, epoch)
             # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            epoch_loss.append(loss.detach()/label.shape[1])
+            epoch_loss.append(loss.sum().detach()/label.shape[1])
 
         opt.step()
         # print("--- %s seconds ---" % (time.time() - t0))

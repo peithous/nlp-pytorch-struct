@@ -20,13 +20,14 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train) # 
-POS.build_vocab(train, min_freq = 5, max_size=7)
+WORD.build_vocab(train,) #  min_freq = 5,
+POS.build_vocab(train, max_size=7)
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle=False)
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
+print(C)
 
 t0 = time.time() - start_time
 # print(t0)
