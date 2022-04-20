@@ -146,6 +146,7 @@ class LinearChain(_Struct):
         """
         V, C = emission.shape
         batch, N = observations.shape
+        # print('C', C)
         scores = torch.zeros(batch, N - 1, C, C).type_as(emission)
         scores[:, :, :, :] += transition.view(1, 1, C, C)
         scores[:, 0, :, :] += init.view(1, 1, C)

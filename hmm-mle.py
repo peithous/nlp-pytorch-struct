@@ -3,15 +3,15 @@ from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
 import torch
-from torch_struct import HMM
+from torch_struct import HMM, LinearChainCRF
 import matplotlib.pyplot as plt
 from torch_struct.data import ConllXDatasetPOS
 
 start_time = time.time()
 device='cpu'
 
-WORD = data.Field(pad_token=None, eos_token='<eos>') #init_token='<bos>', 
-POS = data.Field(include_lengths=True, pad_token=None, eos_token='<eos>') 
+WORD = data.Field(init_token='<bos>', pad_token=None, eos_token='<eos>') #init_token='<bos>', 
+POS = data.Field(init_token='<bos>', include_lengths=True, pad_token=None, eos_token='<eos>') 
 
 fields = (('word', WORD), ('pos', POS), (None, None))
 train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
@@ -20,8 +20,8 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train) # min_freq = 5
-POS.build_vocab(train)
+WORD.build_vocab(train) # 
+POS.build_vocab(train, min_freq = 5, max_size=7)
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle=False)
 
@@ -29,7 +29,7 @@ C = len(POS.vocab)
 V = len(WORD.vocab)
 
 t0 = time.time() - start_time
-print(t0)
+# print(t0)
 
 # counts for mle's 
 tags = [] # prior
@@ -76,7 +76,7 @@ emission = emission.log()
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
-print('t1', time.time() - start_time)
+# print('t1', time.time() - start_time)
 
 def test(iters):
     losses = []
@@ -88,10 +88,11 @@ def test(iters):
         label, lengths = ex.pos
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) 
-        labels = HMM.struct.to_parts(label.transpose(0, 1) \
+        labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor)    
         # print(HMM.struct.from_parts(dist.argmax)[0][0])
-        # print('label', label.transpose(0, 1)[0])  
+        # print('label', labels.shape)  
+        # print(dist.argmax.shape)
         # show_chain(dist.argmax[0])  
         # plt.show()
 
@@ -100,10 +101,11 @@ def test(iters):
         losses.append(loglik.detach()/label.shape[1])
 
         incorrect_edges += (dist.argmax.sum(-1) - labels.sum(-1)).abs().sum() / 2.0
-        total += labels.sum()        
+        total += dist.argmax.sum()         
 
+    print(total, incorrect_edges)
     print('inaccurate', incorrect_edges / total) 
-    return -torch.tensor(losses).mean()
+    return torch.tensor(losses).mean()
 
 # print('train-log-lik', test(train_iter))
 print('test-log-lik', test(test_iter))

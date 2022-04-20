@@ -1,72 +1,53 @@
 import time
 from torch.utils.tensorboard import SummaryWriter
-# from torchtext.legacy import data
 import torchtext.data as data
 from torchtext.data import BucketIterator
 import torch
-from torch import nn
-import torch.nn.functional as F
 import torch.optim as optim
-from torch_struct import LinearChainCRF
-#import matplotlib
+from torch import nn
+from torch_struct import HMM, LinearChainCRF
 import matplotlib.pyplot as plt
 from torch_struct.data import ConllXDatasetPOS
 
 start_time = time.time()
 device='cpu'
-# writer = SummaryWriter(log_dir="lincrf")
 
-# add <eos> bc '.' may not always be the eos 
-# add <bos> to estimate prob of 1st tag in seq
-WORD = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None) 
-POS = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None, include_lengths=True) 
+WORD = data.Field(init_token='<bos>', pad_token=None, eos_token='<eos>') #init_token='<bos>', 
+POS = data.Field(init_token='<bos>', include_lengths=True, pad_token=None, eos_token='<eos>') 
 
 fields = (('word', WORD), ('pos', POS), (None, None))
 train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
 test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
-
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train, ) # min_freq = 10
-POS.build_vocab(train, min_freq = 5, max_size=7) # min_freq = 10, max_size=7
-
+WORD.build_vocab(train, min_freq = 5,) # 
+POS.build_vocab(train, min_freq = 5, max_size=7)
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
-test_iter = BucketIterator(test, batch_size=20, device=device, shuffle =False)
+test_iter = BucketIterator(test, batch_size=20, device=device, shuffle=False)
 
-C = len(POS.vocab.itos)
-V = len(WORD.vocab.itos)
-print(C)
+C = len(POS.vocab)
+V = len(WORD.vocab)
+print(C, V)
+
+# emission = torch.rand((V, C)).log()
+# transition = torch.rand((C, C)).log()
+# init = torch.rand(C).log()
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
         super().__init__()
-        self.embedding = nn.Embedding.from_pretrained(
-                torch.eye(voc_size).type(torch.FloatTensor), # 1-hot 
-                freeze=True) 
-        self.linear = nn.Linear(voc_size, num_pos_tags) 
+        self.emission = nn.Linear(voc_size, num_pos_tags) 
         self.transition = nn.Linear(num_pos_tags, num_pos_tags)
+        self.init = nn.Linear(num_pos_tags, 1)
         
-    def forward(self, words):
-        out = self.embedding(words) # (b x N) -> (b x N x V)
-        final = self.linear(out) # (b x N x V) (V x C) -> (b x N x C)
-        batch, N, C = final.shape
-        # print(final.view(batch, N, C, 1).shape)
-        # print(final.view(batch, N, C, 1)[:, 1:N].shape)
-        vals = final.view(batch, N, C, 1)[:, 1:N] + self.transition.weight.view(1, 1, C, C) # -> (b x N-1 x C x C)      
-        # print(vals)
-        vals[:, 0, :, :] += final.view(batch, N, 1, C)[:, 0] # 1st tag prob
-
-        return vals
+    def forward(self):
+        return self.emission.weight.transpose(0, 1), self.transition.weight, self.init.weight.transpose(0, 1)
 
 model = Model(V, C)
-# opt = optim.SGD(model.parameters(), lr=0.1)
-opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1
-
-
-def show_chain(chain):
-    plt.imshow(chain.detach().sum(-1).transpose(0, 1))
+opt = optim.SGD(model.parameters(), lr=0.1)
+# opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1
 
 def validate(iter):
     losses = []
@@ -74,9 +55,12 @@ def validate(iter):
     total = 0 
     model.eval()
     for i, batch in enumerate(iter):
-        sents = batch.word.transpose(0,1)
+        observations = torch.LongTensor(batch.word).transpose(0, 1).contiguous()            
         label, lengths = batch.pos
-        dist = LinearChainCRF(model(sents), lengths=lengths) 
+        
+        emission, transition, init = model.forward()
+
+        dist = HMM(transition, emission, init, observations, lengths=lengths) 
         argmax = dist.argmax
         gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
@@ -103,11 +87,13 @@ def trn(train_iter):
         epoch_loss = []
         for i, ex in enumerate(train_iter):
             opt.zero_grad()      
-            sents = ex.word.transpose(0,1)
+            # sents = ex.word.transpose(0,1)
+            observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()            
             label, lengths = ex.pos
            
-            scores = model(sents)
-            dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
+            # scores = model(sents)
+            emission, transition, init = model.forward()
+            dist = HMM(transition, emission, init, observations, lengths=lengths) 
             
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
                     .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
@@ -120,7 +106,7 @@ def trn(train_iter):
             # (loss1).backward()
 
             # writer.add_scalar('loss', -loss, epoch)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             epoch_loss.append(loss.detach()/label.shape[1])
 
         opt.step()
@@ -148,4 +134,5 @@ def trn(train_iter):
 trn(train_iter)
 
 print("--- %s seconds ---" % (time.time() - start_time))
+
 
