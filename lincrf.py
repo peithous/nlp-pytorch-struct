@@ -29,8 +29,8 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train, ) # min_freq = 10
-POS.build_vocab(train, min_freq = 5, max_size=7) # min_freq = 10, max_size=7
+WORD.build_vocab(train, min_freq = 10) # min_freq = 10
+POS.build_vocab(train, min_freq = 10, max_size=7) # min_freq = 10, max_size=7
 
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle =False)
@@ -63,7 +63,6 @@ class Model(nn.Module):
 model = Model(V, C)
 # opt = optim.SGD(model.parameters(), lr=0.1)
 opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1
-
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))

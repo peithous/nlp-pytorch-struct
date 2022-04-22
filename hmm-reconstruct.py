@@ -100,8 +100,7 @@ def trn(train_iter):
             # (-loss).backward()
 
 # direct max of log marginal lik 
-            z = dist.partition.sum()
-            # (loss1).backward()
+            z = dist.partition
 
             # print(dist.log_potentials.shape)
             # print(rec_emission.shape)
