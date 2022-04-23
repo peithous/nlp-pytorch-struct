@@ -94,11 +94,11 @@ def trn(train_iter):
                     .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
             # print(labels)
             loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
-            # (-loss).backward()
+            (-loss).backward()
 
 # direct max of log marginal lik 
-            loss1 = dist.partition.sum()
-            (loss1).backward()
+            # loss1 = dist.partition.sum()
+            # (loss1).backward()
 
             # writer.add_scalar('loss', -loss, epoch)
             # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)

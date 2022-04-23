@@ -1,22 +1,77 @@
-### POS Prediction
+## Get some conllx data
 wsj data splits from: `git clone -q http://github.com/srush/temp`  
 - NB: Remove empty lines at the end of `.conllx` files
 
-- "[(Wu and Dredze, 2019)] found [POS tagging] accuracies over 97% across 15 languages from the Universal Dependency (UD) treebank. Accuracies on various English treebanks are also 97% (no matter the algorithm; HMMs, CRFs, BERT perform similarly). This 97% number is also about the human performance on this task, at least for English (Manning, 2011)." (Jurafsky, 3rd ed. , 8.2)  
 
-#### HMM 1-hot MLE: 
+### POS prediction
+
+- To read data in use `from torch_struct.data import ConllXDatasetPOS'
+- class def is modified from orignial/current torch-struct 
+
+#### hmm-1hot-analytic-counts(-sup): 
 `python hmm-mle.py`  
+
+- accurate on test sentences 
+    - train sentences,  held out test sentences
+    -  min_freq = 10, max_size=7
+
 - 93.9% accurate on test sentences (38992 train sentences, 2416 held out test sentences)  
-- 3min on CPU with 100 sample batches
-
-#### Linear Chain CRF 1-hot: 
-~ 
-
-#### Linear Chain CRF Bert embeddomgs: 
-~
-
-#### EM HMM: 
+    - w/out hidden state space restriction 
+    - 3min on CPU with 100 sample batches
 
 
-### Dependency Prediction
+#### hmm-gradient-based-supervised
 
+#### hmm-grad-based-direct-max-marg-loglik(-unsup)
+
+#### hmm-em-analytic(-unsup)
+
+
+#### hmm-grad-based-direct-max-marg-loglik-reconstruction
+
+
+#### hmm-grad-based-em-analytic-reconstruction
+
+
+#### ?? neuralized-hmms
+
+>
+
+#### linear-chain-CRF-1hot-sup: 
+
+#### linear-chain-CRF-1hot-direct-max-marg-loglik(-unsup): 
+
+
+#### linear-chain-CRF-1hot-direct-max-marg-loglik-reconstruction: 
+
+#### linear-chain-CRF-1hot-em-analytic-reconstruction: 
+
+
+
+#### linear-chain-CRF-bert(-sup): 
+
+`python bert-pos.py`  
+
+- 0.2203% inacc at 21 epochs on test sentences ( train sentences,  held out test sentences)  
+    - (min_freq = 10, max_size=7)
+
+#### linear-chain-CRF-bert-direct-max-marg-loglik(-unsup): 
+
+`python bert-pos.py` with "loss1"
+
+- 0.% inacc at 21 epochs on test sentences ( train sentences,  held out test sentences)  
+    - (min_freq = 10, max_size=7)
+
+#### linear-chain-CRF-bert-direct-max-marg-loglik-reconstruction: 
+
+
+
+#### linear-chain-CRF-bert-em-analytic-reconstruction: 
+
+
+>
+
+### Dependency prediction (parent given child)
+- To read in use `from torch_struct.data import ConllXDataset'
+
+#### dep-CRF

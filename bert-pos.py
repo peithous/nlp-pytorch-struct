@@ -28,7 +28,7 @@ train = ConllXDatasetPOS('data/wsj.train0.conllx', fields,
 test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 
 #WORD.build_vocab(train.word, min_freq=3)
-UD_TAG.build_vocab(train.udtag)
+UD_TAG.build_vocab(train.udtag, min_freq = 10, max_size=7)
 
 #train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
 train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
@@ -83,7 +83,7 @@ def train(train_iter, val_iter, model):
     opt = AdamW(model.parameters(), lr=1e-4, eps=1e-8)
     # scheduler = WarmupLinearSchedule(opt, warmup_steps=20, t_total=2500)
 
-    for epoch in range(22):
+    for epoch in range(52):
         t0 = time.time()
 
         model.train()
@@ -103,18 +103,21 @@ def train(train_iter, val_iter, model):
                                 lengths=lengths) #lengths.cuda()   
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1), C, lengths=lengths) \
                                 .type_as(dist.log_potentials)
-            loss = dist.log_prob(labels).sum()
-            (-loss).backward()
+            # loss = dist.log_prob(labels).sum()
+            # (-loss).backward()
             # writer.add_scalar('loss', -loss, epoch)
-            t1 = time.time() - t0
+
+            loss1 = dist.partition.sum()
+            (loss1).backward()
+            # t1 = time.time() - t0
     
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             # scheduler.step()
 
-            losses.append(loss.detach())
+            losses.append(loss1.detach())
 
-        print('t1', epoch, t1, -torch.tensor(losses).mean())
+        # print('t1', epoch, t1, -torch.tensor(losses).mean())
            # print()
             
         if epoch % 10 == 1:            

@@ -29,7 +29,7 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train, min_freq = 10) # min_freq = 10
+# WORD.build_vocab(train, min_freq = 10) # min_freq = 10
 POS.build_vocab(train, min_freq = 10, max_size=7) # min_freq = 10, max_size=7
 
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
@@ -106,12 +106,11 @@ def trn(train_iter):
         epoch_loss = []
         for i, ex in enumerate(train_iter):
             opt.zero_grad()      
-            sents = ex.word.transpose(0,1)
             observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()            
 
             label, lengths = ex.pos
            
-            scores, rec_emission = model(sents)
+            scores, rec_emission = model(observations)
             dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
             
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
@@ -124,7 +123,7 @@ def trn(train_iter):
             z = dist.partition
             # (loss1).backward()
 
-            batch, N = sents.shape
+            batch, N = observations.shape
             rec_obs = rec_emission[observations.view(batch*N), :]
             u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
