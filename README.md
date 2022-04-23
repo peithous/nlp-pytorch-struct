@@ -1,4 +1,4 @@
-## Get some conllx data
+#### Get some conllx data
 wsj data splits from: `git clone -q http://github.com/srush/temp`  
 - NB: Remove empty lines at the end of `.conllx` files
 
@@ -33,7 +33,7 @@ wsj data splits from: `git clone -q http://github.com/srush/temp`
 #### hmm-grad-based-em-analytic-reconstruction
 
 
-#### ?? neuralized-hmms
+##### ?? neuralized-hmms
 
 >
 
@@ -52,15 +52,17 @@ wsj data splits from: `git clone -q http://github.com/srush/temp`
 
 `python bert-pos.py`  
 
-- 0.2203% inacc at 21 epochs on test sentences ( train sentences,  held out test sentences)  
-    - (min_freq = 10, max_size=7)
+- 0.2203 inacc at 21 epochs on test sentences ( train sentences,  held out test sentences)  
+    - min_freq = 10, max_size=7
 
 #### linear-chain-CRF-bert-direct-max-marg-loglik(-unsup): 
 
 `python bert-pos.py` with "loss1"
 
-- 0.% inacc at 21 epochs on test sentences ( train sentences,  held out test sentences)  
-    - (min_freq = 10, max_size=7)
+- 0.8870 inacc at 31  epochs on test sentences
+    - starts overfitting by 41 eps: 0.9497 inacc
+    - 0.9478 inacc at 21 epochs on test sentences ( train sentences,  held out test sentences)  
+    - min_freq = 10, max_size=7
 
 #### linear-chain-CRF-bert-direct-max-marg-loglik-reconstruction: 
 

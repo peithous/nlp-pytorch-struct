@@ -103,19 +103,19 @@ def train(train_iter, val_iter, model):
                                 lengths=lengths) #lengths.cuda()   
             labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1), C, lengths=lengths) \
                                 .type_as(dist.log_potentials)
-            # loss = dist.log_prob(labels).sum()
-            # (-loss).backward()
+            loss = dist.log_prob(labels).sum()
+            (-loss).backward()
             # writer.add_scalar('loss', -loss, epoch)
 
-            loss1 = dist.partition.sum()
-            (loss1).backward()
+            # loss1 = dist.partition.sum()
+            # (loss1).backward()
             # t1 = time.time() - t0
     
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             # scheduler.step()
 
-            losses.append(loss1.detach())
+            losses.append(loss.detach())
 
         # print('t1', epoch, t1, -torch.tensor(losses).mean())
            # print()
