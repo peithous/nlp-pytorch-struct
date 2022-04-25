@@ -42,7 +42,11 @@ w/ more data
 
 #### 5. hmm-em-analytic(-unsup): 
 `python hmm-em.py` 
-- convereges i.e. $loglik|_{\theta^{old}}  - loglik|_{\theta^{old}}$ goes to 0 
+- convereges i.e. Another possibility is to rely on GitHub's own notebook renderer. This even works right here in SO.
+
+To render x_{1,2} = \frac{-b \pm \sqrt{b^2-4ac}}{2b} use the following HTML img tag:
+
+<img src="https://render.githubusercontent.com/render/math?math= loglik|_{\theta^{old}} - loglik|_{\theta^{old}}"> goes to 0 
 - 0.8557 inacc on test, at 100 epochs (passes over train data)
 - high var, rand init might be better than converged test inacc
     - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
