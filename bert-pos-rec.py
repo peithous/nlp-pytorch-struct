@@ -24,7 +24,7 @@ UD_TAG = torchtext.data.Field(init_token="<bos>", eos_token="<eos>", include_len
 #     filter_pred=lambda ex: len(ex.word[0]) < 200 )
 fields=(('word', WORD), ('udtag', UD_TAG), (None, None))
 train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
-                filter_pred=lambda x: len(x.word[0]) < 50) #en_ewt-ud-train.conllu
+                filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
 test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 UD_TAG.build_vocab(train.udtag, min_freq = 10, max_size=7)
 
@@ -89,9 +89,8 @@ def train(train_iter, val_iter, model):
             words, mapper, _ = ex.word
             label, lengths = ex.udtag
             # observations = torch.LongTensor(words).transpose(0,1).contiguous() 
-            batch, N = words.shape
+            batch, _, N = mapper.shape
 
-            print(batch)
             # Model
             log_potentials, rec_emission = model(words, mapper) #.cuda()
             if not lengths.max() <= log_potentials.shape[1] + 1:
@@ -101,20 +100,20 @@ def train(train_iter, val_iter, model):
 # direct max of log marginal lik 
             z = dist.partition
 
-            print(dist.log_potentials.shape)
+            # print(words.shape, mapper.shape)
 
-            rec_obs = rec_emission[words.view(batch*N), :]
-
-            print(rec_obs.view(batch, N, C, 1)[:, 1:].shape)
-
-
-            u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
-
+            obs = torch.matmul(words.unsqueeze(dim=1), mapper).squeeze(dim=1)
             
+            # print('obs', obs.shape)
+
+            rec_obs = rec_emission[obs.view(batch*N), :]
+
+            # print(dist.log_potentials.shape)
+            # print(rec_obs.view(batch, N, C, 1)[:, 1:].shape)
+
+            u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]            
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
-
             u = LinearChainCRF(u_scores, lengths=lengths).partition            
-
             loss = -u + z
             loss.sum().backward()
             # writer.add_scalar('loss', -loss, epoch)
