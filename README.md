@@ -1,6 +1,6 @@
 #### Get some conllx data (i.e. universal dep format)
 wsj data splits from: `git clone -q http://github.com/srush/temp`  
-- NB: Remove empty lines at the end of `.conllx` files
+- NB: remove empty lines at the end of `.conllx` files
 >
 ### POS prediction
 - to read data in, use `from torch_struct.data import ConllXDatasetPOS'

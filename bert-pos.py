@@ -25,8 +25,9 @@ train = ConllXDatasetPOS('data/wsj.train0.conllx', fields,
 test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 #WORD.build_vocab(train.word, min_freq=3)
 UD_TAG.build_vocab(train.udtag, min_freq = 10, max_size=7)
-#train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
-train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
+
+train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
+# train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
 val_iter = torchtext.data.BucketIterator(test, batch_size=20, device="cpu", shuffle=False)
 C = len(UD_TAG.vocab)
 
@@ -49,8 +50,8 @@ class Model(nn.Module):
         #print(vals.shape)
         vals[:, 0, :, :] += final.view(batch, N, 1, C)[:, 0] 
         return vals
+
 model = Model(config["H"], C)
-opt = AdamW(model.parameters(), lr=1e-4, eps=1e-8) # imported with pytorch_transformers
 #wandb.watch(model)
 #model.cuda()
 
@@ -74,42 +75,44 @@ def validate(itera):
     return incorrect_edges / total   
     
 def train(train_iter, val_iter, model):
-    # scheduler = WarmupLinearSchedule(opt, warmup_steps=20, t_total=2500)
-    for epoch in range(52):
-        model.train()
-        losses = []
-        for i, ex in enumerate(train_iter):
-            opt.zero_grad()
-            words, mapper, _ = ex.word
-            label, lengths = ex.udtag
-            N_1, batch = label.shape
+    opt = AdamW(model.parameters(), lr=1e-4, eps=1e-8) # imported with pytorch_transformers
+    scheduler = WarmupLinearSchedule(opt, warmup_steps=20, t_total=150) #t_total=2500
+    
+    model.train()
+    losses = []
 
-            # Model
-            log_potentials = model(words, mapper) #.cuda()
-            if not lengths.max() <= log_potentials.shape[1] + 1:
-                print("fail")
-                continue
-            dist = LinearChainCRF(log_potentials,
+    for i, ex in enumerate(train_iter):
+        opt.zero_grad()
+        words, mapper, _ = ex.word
+        label, lengths = ex.udtag
+        # N_1, batch = label.shape
+
+        # Model
+        log_potentials = model(words, mapper) #.cuda()
+        # if not lengths.max() <= log_potentials.shape[1] + 1:
+        #     print("fail")
+        #     continue
+        dist = LinearChainCRF(log_potentials,
                                 lengths=lengths) #lengths.cuda()   
-            # labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1), C, lengths=lengths) \
-            #                     .type_as(dist.log_potentials)
-            # loss = dist.log_prob(labels).sum()
-            # (-loss).backward()
-            # writer.add_scalar('loss', -loss, epoch)
+        # labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1), C, lengths=lengths) \
+        #                     .type_as(dist.log_potentials)
+        # loss = dist.log_prob(labels).sum()
+        # (-loss).backward()
+        # writer.add_scalar('loss', -loss, epoch)
 
 # direct max of log marginal lik 
-            loss1 = dist.partition.sum()
-            (loss1).backward()
+        loss1 = dist.partition.sum()
+        (loss1).backward()
     
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step()
-            # scheduler.step()
-            losses.append(loss1.detach())
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        opt.step()
+        scheduler.step()
+        losses.append(loss1.detach())
  
-        if epoch % 10 == 1:            
-            print(epoch, -torch.tensor(losses).mean(), words.shape)
-            imprecision = validate(val_iter)
-            print(imprecision)
+        # if i % 10 == 1:            
+        print(i, -torch.tensor(losses).mean(), words.shape)
+        imprecision = validate(val_iter)
+        print(imprecision)
             # writer.add_scalar('val_loss', val_loss, epoch)      
 
             #wandb.log({"train_loss":-torch.tensor(losses).mean(), 

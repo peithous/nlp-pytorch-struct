@@ -16,8 +16,6 @@ start_time = time.time()
 device='cpu'
 # writer = SummaryWriter(log_dir="lincrf")
 
-# add <eos> bc '.' may not always be the eos 
-# add <bos> to estimate prob of 1st tag in seq
 WORD = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None) 
 POS = data.Field(init_token='<bos>', eos_token='<eos>', pad_token=None, include_lengths=True) 
 
@@ -29,7 +27,7 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-# WORD.build_vocab(train, min_freq = 10) # min_freq = 10
+WORD.build_vocab(train, min_freq = 10) # min_freq = 10
 POS.build_vocab(train, min_freq = 10, max_size=7) # min_freq = 10, max_size=7
 
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
@@ -53,17 +51,12 @@ class Model(nn.Module):
         out = self.embedding(words) # (b x N) -> (b x N x V)
         final = self.linear(out) # (b x N x V) (V x C) -> (b x N x C)
         batch, N, C = final.shape
-        # print(final.view(batch, N, C, 1).shape)
-        # print(final.view(batch, N, C, 1)[:, 1:N].shape)
         vals = final.view(batch, N, C, 1)[:, 1:N] + self.transition.weight.view(1, 1, C, C) # -> (b x N-1 x C x C)      
-        # print(vals)
         vals[:, 0, :, :] += final.view(batch, N, 1, C)[:, 0] # 1st tag prob
 
         return vals, self.rec_emission.weight.transpose(0,1)
 
 model = Model(V, C)
-# opt = optim.SGD(model.parameters(), lr=0.1)
-opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
@@ -96,17 +89,17 @@ def validate(iter):
     return incorrect_edges / total   
 
 def trn(train_iter):   
+   # opt = optim.SGD(model.parameters(), lr=0.1)
+    opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1 
+    
     losses = []
     test_acc = []
-    
     for epoch in range(52):
-        t0 = time.time()
-
         model.train()
         epoch_loss = []
         for i, ex in enumerate(train_iter):
             opt.zero_grad()      
-            observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()            
+            observations = torch.LongTensor(ex.word).transpose(0,1).contiguous()            
 
             label, lengths = ex.pos
            
@@ -115,14 +108,17 @@ def trn(train_iter):
         
 # direct max of log marginal lik 
             z = dist.partition
-
             batch, N = observations.shape
+
             rec_obs = rec_emission[observations.view(batch*N), :]
+
+            print(dist.log_potentials.shape)
+            print(rec_obs.view(batch, N, C, 1)[:, 1:].shape)
+
             u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
-
             u = LinearChainCRF(u_scores, lengths=lengths).partition            
-
+            
             loss = -u + z
             loss.sum().backward()
             # writer.add_scalar('loss', -loss, epoch)

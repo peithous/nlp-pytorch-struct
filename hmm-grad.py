@@ -42,10 +42,8 @@ class Model(nn.Module):
         return self.emission.weight.transpose(0,1), self.transition.weight, self.init.weight.transpose(0, 1)
 
 model = Model(V, C)
-# opt = optim.SGD(model.parameters(), lr=0.1)
 
 def validate(iter):
-    # losses = []
     incorrect_edges=0
     total=0 
     model.eval()
@@ -62,17 +60,15 @@ def validate(iter):
         
         incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum()/2.0
         total += argmax.sum()        
-
-        # loss = dist.log_prob(gold).sum()
-        # # print(loss)
-        # losses.append(loss.detach()/label.shape[1])
-
+        
     print(total, incorrect_edges)           
     model.train()    
     return incorrect_edges / total   
 
 def trn(train_iter):   
     opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5, ) # weight_decay=0.1
+    # opt = optim.SGD(model.parameters(), lr=0.1)
+
     losses = []
     # test_acc = []
     for epoch in range(52):
