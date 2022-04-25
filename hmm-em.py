@@ -5,6 +5,7 @@ from torchtext.data import BucketIterator
 import torch
 import torch.optim as optim
 from torch import nn
+import torch.nn.functional as F
 from torch_struct import HMM, LinearChainCRF
 import matplotlib.pyplot as plt
 from torch_struct.data import ConllXDatasetPOS
@@ -39,8 +40,12 @@ class Model(nn.Module):
         self.init = nn.Linear(num_pos_tags, 1, bias=False)
         
     def forward(self):
-        return self.emission.weight.transpose(0, 1), self.transition.weight, \
-            self.init.weight.transpose(0, 1), self.embedding.weight
+        transition_probs = F.softmax(self.transition.weight, dim=0)
+        emission_probs = F.softmax(self.emission.weight.transpose(0,1), dim=0)
+        init_probs = F.softmax(self.init.weight.transpose(0,1), dim=0)
+
+        return emission_probs, transition_probs, init_probs,\
+                self.embedding.weight
 
 model = Model(V, C)
 
@@ -48,12 +53,12 @@ def validate(iter, emission, transition, init):
     incorrect_edges = 0
     total = 0 
     for i, batch in enumerate(iter):
-        observations = torch.LongTensor(batch.word).transpose(0, 1).contiguous()            
+        observations = torch.LongTensor(batch.word).transpose(0,1).contiguous()            
         label, lengths = batch.pos
         
         dist = HMM(transition, emission, init, observations, lengths=lengths) 
         argmax = dist.argmax
-        gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
+        gold = LinearChainCRF.struct.to_parts(label.transpose(0,1)\
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
         incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum() / 2.0
@@ -68,62 +73,76 @@ def trn(iter):
     test_acc = []
 
     emission, transition, init, one_hot = model.forward() # could also be tensors instead of nn.lin.weight?
-   
-    # loss_old = -99999999
-    # epoch = 0 
-    # while(True): # i.e. iterations over all data i.e. num times all params updated 
-    #     epoch += 1
+    
+    assert torch.isclose(transition.sum(0, keepdim=True).sum(), \
+                         torch.tensor(C, dtype=torch.float)) # should be for x in C-{eos}, sum_C  p(c, x) = 1?
+    transition = transition.log()
 
-    for epoch in range(5): 
+    assert torch.isclose(emission.sum(0, keepdim=True).sum(), \
+                         torch.tensor(C, dtype=torch.float)) # sum_V p(v | c) = 1
+    emission = emission.log()
 
+    assert torch.isclose(init.sum(), torch.tensor(1.)) # \sum_C p_c = 1
+    init = init.log()
+
+    # transition = torch.ones((C, C)) # p(. | eos) = 1/C
+    # transition = transition.float()/transition.sum(0, keepdim=True)
+    # transition = transition.log()    
+
+    for epoch in range(100): 
+        print(epoch)
         for i, ex in enumerate(iter): # actually reads in 1 batch with all train data (not a real for-loop)
-            observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous() # b x N (b = all train data)
+            observations = torch.LongTensor(ex.word).transpose(0,1).contiguous() # b x N (b = all train data)
             _, lengths = ex.pos     
             batch, N = observations.shape
-            dist = HMM(transition, emission, init, observations, lengths=lengths) 
-            
-            loss_old = -dist.partition.sum()/batch # evaluated at theta^{old}
-            print('1', loss_old)
-            # batch_loss_old.append(loss_old.detach()/batch)
-                
-# E: marginals of posterior p(latent vars | obs)
+
+            dist = HMM(transition, emission, init, observations, lengths=lengths)  # using theta^{old}
+            old = dist.partition.sum()
+
+# E: marginals of posterior p(latent_vars|obs)
             pair_marg = dist.marginals # xi's (b x N-1 x C x C)
             unary_marg = pair_marg.sum(dim=-1) # gamma's: sum_{j=1}^C p[z_{t-1} =j, z_t =i] 
-            init_marg = pair_marg[:, 0, :, :].sum(dim=-2) # gamma_1: sum_{i=1}^C  p[z_1 =j, z_t =i] 
+            init_marg = pair_marg[:,0,:,:].sum(dim=-2) # gamma_1: sum_{i=1}^C  p[z_1 =j, z_t =i] 
 
-# M: theta^{new} #add norm tests
+# M: theta^{new} 
             # div prob of getting to a state at t from each state at t-1 by prob of leaving each state at t-1
             # i.e. div each transition mat row by 1 x C vec corresponding to prob of leaving each state
             # b x C_{t-1} x C_t /  b x 1 x C_{t-1}
-            transition = (pair_marg.sum(dim=-3)/pair_marg.sum(dim=-3).sum(dim=-2).unsqueeze(dim=1)).sum(dim=0)   # sum_t^{N-1} xi_{t,j ->k}/sum_{l=1}^C sum_t^{N-1} xi_{t,j ->l}; sum along b
-            init = (init_marg/init_marg.sum()).sum(dim=0)
+            transition = (pair_marg.sum(dim=-3)/pair_marg.sum(dim=-3).sum(dim=-2).unsqueeze(dim=1)).sum(dim=0) #.log() # sum_t^{N-1} xi_{t,j -> k}/sum_{l=1}^C sum_t^{N-1} xi_{t,j -> l}; sum along b
+            transition = transition/transition.sum(0, keepdim=True)
+            assert torch.isclose(transition.sum(0, keepdim=True).sum(), \
+                                    torch.tensor(C, dtype=torch.float)) # should be for x in C-{eos}, sum_C  p(c, x) = 1?
+            transition = transition.log()
+
+            init = (init_marg/init_marg.sum()).sum(dim=0) #.log()
+            init = init.float()/init.sum(0, keepdim=True)
+            assert torch.isclose(init.sum(), torch.tensor(1.))# \sum_C p_c = 1
+            init = init.log()
+
             gamma = torch.cat((init_marg.unsqueeze(dim=1), unary_marg), dim=1) # b x N x C
             v_x_n = one_hot[observations.view(batch*N), :].view(batch, N, V).transpose(1,2)
             #  V x N * N x C -> V x C; V x C/1 x C
-            emission = (torch.matmul(v_x_n, gamma)/gamma.sum(dim=1).unsqueeze(dim=1)).sum(dim=0) 
+            emission = (torch.matmul(v_x_n, gamma)/gamma.sum(dim=1).unsqueeze(dim=1)).sum(dim=0) #.log()
+            emission = emission.float()/emission.sum(0, keepdim=True)
+            assert torch.isclose(emission.sum(0, keepdim=True).sum(), \
+                                    torch.tensor(C, dtype=torch.float)) # sum_V p(v | c) = 1
+            emission = emission.log()
 
-            dist_new = HMM(transition, emission, init, observations, lengths=lengths) 
-            loss = -dist_new.partition.sum()/batch # at theta^{new}
-            print('2', loss)
+            dist_new = HMM(transition, emission, init, observations, lengths=lengths)             
+            lik = dist_new.partition.sum() # at theta^{new} # becomes too big to evaluate by 3rd pass
 
+            diff = torch.abs(old -lik)
+
+            print('diff', diff)
 
             imprecision = validate(test_iter, emission, transition, init)
             print(imprecision)
 
-            diff = torch.abs(loss - loss_old)
-            
-            print('diff', diff)
-
-            # if epoch > 50 or diff <  0.05:
-            #     break
-
-            loss_old = loss
-
     return transition, emission, init, observations
 
-            # print('l', label.transpose(0, 1)) #labels         
-            # show_chain(dist.argmax[0])
-            # plt.show()
+    # print('l', label.transpose(0, 1)) #labels         
+    # show_chain(dist.argmax[0])
+    # plt.show()
 
     # plt.plot(losses)
     # plt.plot(test_acc)

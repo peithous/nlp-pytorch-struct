@@ -8,7 +8,7 @@ wsj data splits from: `git clone -q http://github.com/srush/temp`
 
 ### non-neural baselines
 
-#### hmm-1hot-analytic-counts(-sup): 
+#### 1. hmm-1hot-analytic-counts(-sup): 
 `python hmm-mle.py`  
 - 0.1614 inaac on test sentences 
     - 1174 train sentences, 45 held out test sentences
@@ -20,14 +20,14 @@ w/ more data
     - w/out hidden state space restriction 
     - 3min on CPU with 100 sample batches
 
-#### hmm-gradient-based(-sup)
+#### 2. hmm-gradient-based(-sup): 
 `python hmm-grad.py` with "loss"
 -  0.2659 inaac on test sentences at 21 epochs 
     - Adam: lr=0.01, weight_decay=0.2
     - no clip_grad_norm
     - 1174 train sentences, 45 held out test sentences; min_freq = 10, max_size=7
 
-#### hmm-grad-based-direct-max-marg-loglik(-unsup)
+#### 3. hmm-grad-based-direct-max-marg-loglik(-unsup): 
 `python hmm-grad.py` with "loss1"
 -  0.6239 inaac on test sentences at 21 epochs (if you're lucky, i.e. very high variance)
     - Adam: lr=0.1, weight_decay=0.5
@@ -35,13 +35,7 @@ w/ more data
     - 1174 train sentences, 45 held out test sentences
     - min_freq = 10, max_size=7
 
-#### hmm-em-analytic(-unsup)
--  inaac on test sentences 
-    - 1174 train sentences, 45 held out test sentences
-    - min_freq = 10, max_size=7
-
-
-#### hmm-grad-based-direct-max-marg-loglik-reconstruction
+#### 4. hmm-grad-based-direct-max-marg-loglik-reconstruction: 
 `python hmm-reconstruct.py` 
 - 0.6239 inaac on test sentences at 11 epochs (very high variance)
     - Adam: lr=0.01, weight_decay=0.5
@@ -49,27 +43,32 @@ w/ more data
     - 1174 train sentences, 45 held out test sentences
     - min_freq = 10, max_size=7
 
+#### 5. hmm-em-analytic(-unsup): 
 
-#### hmm-grad-based-em-analytic-reconstruction
+-  0.6239 inaac on test sentences at 3rd pass over train data (epoch)
+    - 1174 train sentences, 45 held out test sentences
+    - min_freq = 10, max_size=7
 
+#### 6. hmm-grad-based-em-analytic-reconstruction: 
 
-##### ?? neuralized-hmms
 
 >
 
-#### linear-chain-CRF-1hot(-sup): 
+#### 7. linear-chain-CRF-1hot(-sup): 
 
-#### linear-chain-CRF-1hot-direct-max-marg-loglik(-unsup): 
-
-
-#### linear-chain-CRF-1hot-direct-max-marg-loglik-reconstruction: 
-
-#### linear-chain-CRF-1hot-em-analytic-reconstruction: 
+#### 8. linear-chain-CRF-1hot-direct-max-marg-loglik(-unsup): 
 
 
-### bert pretrained embeddings 
+#### 9. linear-chain-CRF-1hot-direct-max-marg-loglik-reconstruction: 
 
-#### linear-chain-CRF-bert(-sup): 
+
+#### 10. linear-chain-CRF-1hot-em-analytic-reconstruction: 
+
+
+
+### bert pretrained embeddings:  
+
+#### 1. linear-chain-CRF-bert(-sup): 
 `python bert-pos.py`  
 ?? rerun
 - 0.2203 inacc at 21 epochs on test sentences 
@@ -78,7 +77,7 @@ w/ more data
     - min_freq = 10, max_size=7
     - 28095.17342400551 secds for 52 eps
 
-#### linear-chain-CRF-bert-direct-max-marg-loglik(-unsup): 
+#### 2. linear-chain-CRF-bert-direct-max-marg-loglik(-unsup): 
 `python bert-pos.py` with "loss1"
 ?? rerun
 - 0.8870 inacc at 31 epochs on test sentences
@@ -89,16 +88,18 @@ w/ more data
     - min_freq = 10, max_size=7
     - 27461.224514961243 for 52 eps
 
-#### linear-chain-CRF-bert-direct-max-marg-loglik-reconstruction: 
+#### 3. linear-chain-CRF-bert-direct-max-marg-loglik-reconstruction: 
 
 
 
-#### linear-chain-CRF-bert-em-analytic-reconstruction: 
+#### 4. linear-chain-CRF-bert-em-analytic-reconstruction: 
 
+> 
+##### ?? neuralized-hmms
 
 >
 
 ## Dependency prediction (parent given child)
 - to read in, use `from torch_struct.data import ConllXDataset'
 
-#### dep-CRF
+#### dep-CRF: 
