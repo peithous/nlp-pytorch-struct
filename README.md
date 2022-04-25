@@ -2,9 +2,11 @@
 wsj data splits from: `git clone -q http://github.com/srush/temp`  
 - NB: remove empty lines at the end of `.conllx` files
 >
-### POS prediction
+## POS prediction
 - to read data in, use `from torch_struct.data import ConllXDatasetPOS'
 - class def is modified from orignial/current torch-struct 
+
+### non-neural baselines
 
 #### hmm-1hot-analytic-counts(-sup): 
 `python hmm-mle.py`  
@@ -65,6 +67,7 @@ w/ more data
 #### linear-chain-CRF-1hot-em-analytic-reconstruction: 
 
 
+### bert pretrained embeddings 
 
 #### linear-chain-CRF-bert(-sup): 
 `python bert-pos.py`  
@@ -95,7 +98,7 @@ w/ more data
 
 >
 
-### Dependency prediction (parent given child)
+## Dependency prediction (parent given child)
 - to read in, use `from torch_struct.data import ConllXDataset'
 
 #### dep-CRF

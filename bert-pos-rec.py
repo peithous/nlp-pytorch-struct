@@ -23,9 +23,9 @@ UD_TAG = torchtext.data.Field(init_token="<bos>", eos_token="<eos>", include_len
 #     fields=(('word', WORD), ('udtag', UD_TAG), (None, None)), 
 #     filter_pred=lambda ex: len(ex.word[0]) < 200 )
 fields=(('word', WORD), ('udtag', UD_TAG), (None, None))
-train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
+train = ConllXDatasetPOS('data/sam.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
-test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
+test = ConllXDatasetPOS('data/samtest.conllx', fields)
 UD_TAG.build_vocab(train.udtag, min_freq = 10, max_size=7)
 
 #train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
@@ -102,10 +102,8 @@ def train(train_iter, val_iter, model):
 
             # print(words.shape, mapper.shape)
 
-            obs = torch.matmul(words.unsqueeze(dim=1), mapper).squeeze(dim=1)
-            
+            obs = torch.matmul(words.unsqueeze(dim=1), mapper).squeeze(dim=1)            
             # print('obs', obs.shape)
-
             rec_obs = rec_emission[obs.view(batch*N), :]
 
             # print(dist.log_potentials.shape)
