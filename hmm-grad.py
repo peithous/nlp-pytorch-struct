@@ -5,6 +5,7 @@ from torchtext.data import BucketIterator
 import torch
 import torch.optim as optim
 from torch import nn
+import torch.nn.functional as F
 from torch_struct import HMM, LinearChainCRF
 import matplotlib.pyplot as plt
 from torch_struct.data import ConllXDatasetPOS
@@ -39,7 +40,11 @@ class Model(nn.Module):
         self.init = nn.Linear(num_pos_tags, 1, bias=False)
         
     def forward(self):
-        return self.emission.weight.transpose(0,1), self.transition.weight, self.init.weight.transpose(0, 1)
+        transition_probs = F.log_softmax(self.transition.weight, dim=0)
+        emission_probs = F.log_softmax(self.emission.weight.transpose(0,1), dim=0)
+        init_probs = F.log_softmax(self.init.weight.transpose(0,1), dim=0)
+
+        return emission_probs, transition_probs, init_probs
 
 model = Model(V, C)
 
@@ -65,40 +70,42 @@ def validate(iter):
     return incorrect_edges / total   
 
 def trn(train_iter):   
-    opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5, ) # weight_decay=0.1
+    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.3, ) # weight_decay=0.1
     # opt = optim.SGD(model.parameters(), lr=0.1)
 
     losses = []
     # test_acc = []
-    for epoch in range(52):
+    for epoch in range(302):
         model.train()
-        batch_loss = []
+        batch_lik = []
         for i, ex in enumerate(train_iter):
             opt.zero_grad()      
-            # sents = ex.word.transpose(0,1)
             observations = torch.LongTensor(ex.word).transpose(0,1).contiguous()            
             label, lengths = ex.pos
+            # batch, N = observations.shape
            
             emission, transition, init = model.forward()
             dist = HMM(transition, emission, init, observations, lengths=lengths) 
 
 # supervised         
-            # labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
-            #         .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
-            # loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
-            # (-loss).backward()
-            # batch_loss.append(loss.detach()/label.shape[1])
-            # writer.add_scalar('loss', -loss, epoch)
+            labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
+                    .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
+            lik = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
+            (-lik).backward()
+            batch_lik.append(lik.detach()/label.shape[1])
+            # writer.add_scalar('log-lik', lik, epoch)
 
 # unsup: direct max of log marginal lik 
-            loss1 = dist.partition.sum()
-            (loss1).backward()
-            batch_loss.append(loss1.detach()/label.shape[1])
+            # lik_u = dist.partition.sum()
+            # (-lik_u).backward()
+            # batch_lik.append(lik_u.detach()/label.shape[1])
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            # print(dist.marginals.sum(-1).sum(-1)[0][1] )
+
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
 
-        losses.append(torch.tensor(batch_loss).mean())
+        losses.append(torch.tensor(batch_lik).mean())
 
         if epoch % 10 == 1:            
             print(epoch, 'train-loss', losses[-1])

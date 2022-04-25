@@ -69,20 +69,9 @@ def validate(iter, emission, transition, init):
     return incorrect_edges / total   
 
 def trn(iter):   
-    losses = []
-    test_acc = []
-
+    # losses = []
+    # test_acc = []
     emission, transition, init, one_hot = model.forward() # could also be tensors instead of nn.lin.weight?
-    # assert torch.isclose(transition.sum(0, keepdim=True).sum(), \
-    #                      torch.tensor(C, dtype=torch.float)) # should be for x in C-{eos}, sum_C  p(c, x) = 1?
-    # transition = transition.log()
-    # assert torch.isclose(emission.sum(0, keepdim=True).sum(), \
-    #                      torch.tensor(C, dtype=torch.float)) # sum_V p(v | c) = 1
-    # emission = emission.log()
-    # assert torch.isclose(init.sum(), torch.tensor(1.)) # \sum_C p_c = 1
-    # init = init.log()
-
-
     for epoch in range(100): 
         print(epoch)
 
@@ -132,7 +121,7 @@ def trn(iter):
             imprecision = validate(test_iter, emission, transition, init)
             print(imprecision)
 
-        # return transition, emission, init, observations
+    return transition, emission, init, observations
 
     # print('l', label.transpose(0, 1)) #labels         
     # show_chain(dist.argmax[0])

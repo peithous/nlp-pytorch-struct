@@ -10,9 +10,8 @@ wsj data splits from: `git clone -q http://github.com/srush/temp`
 
 #### 1. hmm-1hot-analytic-counts(-sup): 
 `python hmm-mle.py`  
-- 0.1614 inaac on test sentences 
-    - 1174 train sentences, 45 held out test sentences
-    - min_freq = 10, max_size=7
+- 0.1614 inacc on test sentences 
+    - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
     - 174 secds CPU
 >
 w/ more data
@@ -22,32 +21,31 @@ w/ more data
 
 #### 2. hmm-gradient-based(-sup): 
 `python hmm-grad.py` with "loss"
--  0.2659 inaac on test sentences at 21 epochs 
-    - Adam: lr=0.01, weight_decay=0.2
+- 0.2650 inacc on test sentences at 21 epochs, Adam: lr=0.01, weight_decay=0.2
+- 0.2621 inacc at 201, Adam: lr=0.001, weight_decay=0.2
     - no clip_grad_norm
-    - 1174 train sentences, 45 held out test sentences; min_freq = 10, max_size=7
+    - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
 
 #### 3. hmm-grad-based-direct-max-marg-loglik(-unsup): 
 `python hmm-grad.py` with "loss1"
--  0.6239 inaac on test sentences at 21 epochs (if you're lucky, i.e. very high variance)
+-  0.8604 inacc on test sentences at 61 epochs (if and when, very high variance)
     - Adam: lr=0.1, weight_decay=0.5
     - clip_grad_norm: 1.0
-    - 1174 train sentences, 45 held out test sentences
-    - min_freq = 10, max_size=7
+    - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
 
 #### 4. hmm-grad-based-direct-max-marg-loglik-reconstruction: 
 `python hmm-reconstruct.py` 
-- 0.6239 inaac on test sentences at 11 epochs (very high variance)
+- inacc on test sentences at  epochs (very high variance)
     - Adam: lr=0.01, weight_decay=0.5
     - clip_grad_norm: 1.0
-    - 1174 train sentences, 45 held out test sentences
-    - min_freq = 10, max_size=7
+    - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
 
 #### 5. hmm-em-analytic(-unsup): 
-
--  0.6239 inaac on test sentences at 3rd pass over train data (epoch)
-    - 1174 train sentences, 45 held out test sentences
-    - min_freq = 10, max_size=7
+`python hmm-em.py` 
+- convereges i.e. $loglik|_{\theta^{old}}  - loglik|_{\theta^{old}}$ goes to 0 
+- 0.8557 inacc on test, at 100 epochs (passes over train data)
+- high var, rand init might be better than converged test inacc
+    - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
 
 #### 6. hmm-grad-based-em-analytic-reconstruction: 
 
@@ -91,8 +89,8 @@ w/ more data
 #### 3. linear-chain-CRF-bert-direct-max-marg-loglik-reconstruction: 
 
 
-
 #### 4. linear-chain-CRF-bert-em-analytic-reconstruction: 
+
 
 > 
 ##### ?? neuralized-hmms

@@ -5,6 +5,7 @@ from torchtext.data import BucketIterator
 import torch
 import torch.optim as optim
 from torch import nn
+import torch.nn.functional as F
 from torch_struct import HMM, LinearChainCRF
 import matplotlib.pyplot as plt
 from torch_struct.data import ConllXDatasetPOS
@@ -23,7 +24,7 @@ print('total train sentences', len(train))
 print('total test sentences', len(test))
 
 WORD.build_vocab(train,  min_freq = 5,) #  min_freq = 5,
-POS.build_vocab(train, min_freq = 10, max_size=7)
+POS.build_vocab(train, min_freq = 5, max_size=7)
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle=False)
 
@@ -34,14 +35,19 @@ V = len(WORD.vocab)
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
         super().__init__()
-        self.emission = nn.Linear(voc_size, num_pos_tags) 
-        self.transition = nn.Linear(num_pos_tags, num_pos_tags)
-        self.init = nn.Linear(num_pos_tags, 1)
+        self.emission = nn.Linear(voc_size, num_pos_tags, bias=False) 
+        self.transition = nn.Linear(num_pos_tags, num_pos_tags, bias=False)
+        self.init = nn.Linear(num_pos_tags, 1, bias=False)
         self.rec_emission = nn.Linear(voc_size, num_pos_tags) 
-
+        
     def forward(self):
-        return self.emission.weight.transpose(0, 1), self.transition.weight, \
-                    self.init.weight.transpose(0, 1), self.rec_emission.weight.transpose(0, 1)
+        transition_probs = F.log_softmax(self.transition.weight, dim=0)
+        emission_probs = F.log_softmax(self.emission.weight.transpose(0,1), dim=0)
+        init_probs = F.log_softmax(self.init.weight.transpose(0,1), dim=0)
+        rec_emission_probs = F.log_softmax(self.rec_emission.weight.transpose(0,1), 0)
+
+        return emission_probs, transition_probs, init_probs,\
+                rec_emission_probs
 
 model = Model(V, C)
 
@@ -78,7 +84,7 @@ def trn(train_iter):
     losses = []
     test_acc = []
     
-    for epoch in range(52):
+    for epoch in range(102):
         model.train()
         epoch_loss = []
         for i, ex in enumerate(train_iter):
@@ -100,6 +106,7 @@ def trn(train_iter):
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
             u = LinearChainCRF(u_scores, lengths=lengths).partition
             loss = -u + z
+
             loss.sum().backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
