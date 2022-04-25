@@ -25,19 +25,16 @@ fields = (('word', WORD), ('pos', POS), (None, None))
 train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
 test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
-
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
 WORD.build_vocab(train, min_freq = 10) # min_freq = 10
 POS.build_vocab(train, min_freq = 10, max_size=7) # min_freq = 10, max_size=7
-
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle =False)
-
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
-print(C)
+# print(C)
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):

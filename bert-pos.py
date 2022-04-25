@@ -11,14 +11,11 @@ from torch_struct.data import ConllXDatasetPOS
 
 start_time = time.time()
 #writer = SummaryWriter(log_dir="bert-pos")
-
 config = {"bert": "bert-base-cased", "H" : 768, "dropout": 0.2}
-
 model_class, tokenizer_class, pretrained_weights = BertModel, BertTokenizer, config["bert"]
 tokenizer = tokenizer_class.from_pretrained(pretrained_weights)    
 WORD = torch_struct.data.SubTokenizedField(tokenizer)
 UD_TAG = torchtext.data.Field(init_token="<bos>", eos_token="<eos>", include_lengths=True)
-
 # train, val, test = torchtext.datasets.UDPOS.splits(
 #     fields=(('word', WORD), ('udtag', UD_TAG), (None, None)), 
 #     filter_pred=lambda ex: len(ex.word[0]) < 200 )
@@ -26,14 +23,11 @@ fields=(('word', WORD), ('udtag', UD_TAG), (None, None))
 train = ConllXDatasetPOS('data/wsj.train0.conllx', fields, 
                 filter_pred=lambda x: len(x.word) < 50) #en_ewt-ud-train.conllu
 test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
-
 #WORD.build_vocab(train.word, min_freq=3)
 UD_TAG.build_vocab(train.udtag, min_freq = 10, max_size=7)
-
 #train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
 train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
 val_iter = torchtext.data.BucketIterator(test, batch_size=20, device="cpu", shuffle=False)
-
 C = len(UD_TAG.vocab)
 
 class Model(nn.Module):
@@ -55,8 +49,8 @@ class Model(nn.Module):
         #print(vals.shape)
         vals[:, 0, :, :] += final.view(batch, N, 1, C)[:, 0] 
         return vals
-
 model = Model(config["H"], C)
+opt = AdamW(model.parameters(), lr=1e-4, eps=1e-8) # imported with pytorch_transformers
 #wandb.watch(model)
 #model.cuda()
 
@@ -80,12 +74,8 @@ def validate(itera):
     return incorrect_edges / total   
     
 def train(train_iter, val_iter, model):
-    opt = AdamW(model.parameters(), lr=1e-4, eps=1e-8)
     # scheduler = WarmupLinearSchedule(opt, warmup_steps=20, t_total=2500)
-
     for epoch in range(52):
-        t0 = time.time()
-
         model.train()
         losses = []
         for i, ex in enumerate(train_iter):
@@ -101,25 +91,21 @@ def train(train_iter, val_iter, model):
                 continue
             dist = LinearChainCRF(log_potentials,
                                 lengths=lengths) #lengths.cuda()   
-            labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1), C, lengths=lengths) \
-                                .type_as(dist.log_potentials)
-            loss = dist.log_prob(labels).sum()
-            (-loss).backward()
+            # labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1), C, lengths=lengths) \
+            #                     .type_as(dist.log_potentials)
+            # loss = dist.log_prob(labels).sum()
+            # (-loss).backward()
             # writer.add_scalar('loss', -loss, epoch)
 
-            # loss1 = dist.partition.sum()
-            # (loss1).backward()
-            # t1 = time.time() - t0
+# direct max of log marginal lik 
+            loss1 = dist.partition.sum()
+            (loss1).backward()
     
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
             # scheduler.step()
-
-            losses.append(loss.detach())
-
-        # print('t1', epoch, t1, -torch.tensor(losses).mean())
-           # print()
-            
+            losses.append(loss1.detach())
+ 
         if epoch % 10 == 1:            
             print(epoch, -torch.tensor(losses).mean(), words.shape)
             imprecision = validate(val_iter)

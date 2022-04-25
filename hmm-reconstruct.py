@@ -23,7 +23,7 @@ print('total train sentences', len(train))
 print('total test sentences', len(test))
 
 WORD.build_vocab(train,  min_freq = 5,) #  min_freq = 5,
-POS.build_vocab(train,  max_size=7)
+POS.build_vocab(train, min_freq = 10, max_size=7)
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle=False)
 
@@ -44,8 +44,6 @@ class Model(nn.Module):
                     self.init.weight.transpose(0, 1), self.rec_emission.weight.transpose(0, 1)
 
 model = Model(V, C)
-# opt = optim.SGD(model.parameters(), lr=0.1)
-opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1
 
 def validate(iter):
     losses = []
@@ -63,7 +61,7 @@ def validate(iter):
         gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
-        incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum() / 2.0
+        incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum()/2.0
         total += argmax.sum()        
 
         # loss = dist.log_prob(gold).sum()
@@ -75,56 +73,40 @@ def validate(iter):
     return incorrect_edges / total   
 
 def trn(train_iter):   
+    # opt = optim.SGD(model.parameters(), lr=0.1)
+    opt = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.5,) # weight_decay=0.1
     losses = []
     test_acc = []
     
     for epoch in range(52):
-        t0 = time.time()
-
         model.train()
         epoch_loss = []
         for i, ex in enumerate(train_iter):
             opt.zero_grad()      
             # sents = ex.word.transpose(0,1)
-            observations = torch.LongTensor(ex.word).transpose(0, 1).contiguous()            
+            observations = torch.LongTensor(ex.word).transpose(0,1).contiguous()            
             label, lengths = ex.pos
            
             # scores = model(sents)
             emission, transition, init, rec_emission = model.forward()
             dist = HMM(transition, emission, init, observations, lengths=lengths) 
             
-            # labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
-            #         .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
-            # # print(labels)
-            # loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
-            # (-loss).backward()
-
 # direct max of log marginal lik 
             z = dist.partition
 
-            # print(dist.log_potentials.shape)
-            # print(rec_emission.shape)
-           
             batch, N = observations.shape
             rec_obs = rec_emission[observations.view(batch*N), :]
             u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
-
             u = LinearChainCRF(u_scores, lengths=lengths).partition
-
             loss = -u + z
             loss.sum().backward()
-
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            opt.step()
             # writer.add_scalar('loss', -loss, epoch)
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             epoch_loss.append(loss.sum().detach()/label.shape[1])
 
-        opt.step()
-        # print("--- %s seconds ---" % (time.time() - t0))
-
         losses.append(torch.tensor(epoch_loss).mean())
-
-        # print('t1', epoch, t1, -torch.tensor(epoch_loss).mean())
 
         if epoch % 10 == 1:            
             print(epoch, 'train-loss', losses[-1])

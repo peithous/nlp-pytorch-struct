@@ -37,7 +37,7 @@ test_iter = BucketIterator(test, batch_size=20, device=device, shuffle =False)
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
-print(C)
+# print(C)
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
@@ -112,16 +112,9 @@ def trn(train_iter):
            
             scores, rec_emission = model(observations)
             dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
-            
-            labels = LinearChainCRF.struct.to_parts(label.transpose(0, 1) \
-                    .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C 
-            # print(labels)
-            # loss = dist.log_prob(labels).sum() # (*sample_shape x batch_shape x event_shape*) -> (*sample_shape x batch_shape*)
-            # (-loss).backward()
-
+        
 # direct max of log marginal lik 
             z = dist.partition
-            # (loss1).backward()
 
             batch, N = observations.shape
             rec_obs = rec_emission[observations.view(batch*N), :]
@@ -132,13 +125,11 @@ def trn(train_iter):
 
             loss = -u + z
             loss.sum().backward()
-
             # writer.add_scalar('loss', -loss, epoch)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            epoch_loss.append(loss.sum().detach()/label.shape[1])
+            opt.step()
 
-        opt.step()
-        # print("--- %s seconds ---" % (time.time() - t0))
+            epoch_loss.append(loss.sum().detach()/label.shape[1])
 
         losses.append(torch.tensor(epoch_loss).mean())
 
