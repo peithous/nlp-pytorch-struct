@@ -3,6 +3,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torchtext
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch_struct import LinearChainCRF
 import torch_struct.data
 import torchtext.data as data
@@ -51,7 +52,10 @@ class Model(nn.Module):
         batch, N, C = final.shape
         vals = final.view(batch, N, C, 1)[:, 1:N] + self.transition.weight.view(1, 1, C, C)
         vals[:, 0, :, :] += final.view(batch, N, 1, C)[:, 0] 
-        return vals, self.rec_emission.weight.transpose(0,1)
+        
+        rec_emission_probs = F.log_softmax(self.rec_emission.weight.transpose(0,1), 0)
+
+        return vals, rec_emission_probs
 
 model = Model(config["H"], C)
 #wandb.watch(model)

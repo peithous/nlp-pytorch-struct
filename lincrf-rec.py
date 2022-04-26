@@ -70,19 +70,26 @@ def validate(iter):
     total = 0 
     model.eval()
     for i, batch in enumerate(iter):
-        sents = batch.word.transpose(0,1)
+        sents = torch.LongTensor(batch.word).transpose(0, 1).contiguous() 
         label, lengths = batch.pos     
         
-        scores, _ = model(sents)
+        scores, rec_emission = model(sents)
 
         dist = LinearChainCRF(scores, lengths=lengths) 
-        argmax = dist.argmax
+        # argmax = dist.argmax     
 
-        gold = LinearChainCRF.struct.to_parts(label.transpose(0,1)\
+        batch, N = sents.shape
+        rec_obs = rec_emission[sents.view(batch*N), :]
+        u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
+        u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
+        u = LinearChainCRF(u_scores, lengths=lengths)
+
+        argmax = u.argmax
+        gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
         incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum()/2.0
-        total += argmax.sum()        
+        total += argmax.sum()  
 
     print(total, incorrect_edges)           
     model.train()    
@@ -90,11 +97,11 @@ def validate(iter):
 
 def trn(train_iter):   
     # opt = optim.SGD(model.parameters(), lr=0.1)
-    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=3.0,  ) # weight_decay=0.1 
+    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=5.0,  ) # weight_decay=0.1 
     
     losses = []
     test_acc = []
-    for epoch in range(102):
+    for epoch in range(202):
         model.train()
         epoch_loss = []
         for i, ex in enumerate(train_iter):
@@ -112,11 +119,7 @@ def trn(train_iter):
 
             rec_obs = rec_emission[observations.view(batch*N), :]
 
-            # print(dist.log_potentials.shape)
-            # print(rec_obs.view(batch, N, C, 1)[:, 1:].shape)
-
             u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
-
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
             u = LinearChainCRF(u_scores, lengths=lengths).partition            
             
@@ -124,9 +127,6 @@ def trn(train_iter):
             loss.sum().backward()
             # writer.add_scalar('loss', -loss, epoch)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-
-            # if i == 1:
-            #     print(rec_emission)
             opt.step()
 
             epoch_loss.append(loss.sum().detach()/label.shape[1])
