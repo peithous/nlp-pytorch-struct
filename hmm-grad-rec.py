@@ -60,10 +60,17 @@ def validate(iter):
         observations = torch.LongTensor(batch.word).transpose(0, 1).contiguous()            
         label, lengths = batch.pos
         
-        emission, transition, init, _ = model.forward()
+        emission, transition, init, rec_emission = model.forward()
 
         dist = HMM(transition, emission, init, observations, lengths=lengths) 
-        argmax = dist.argmax
+
+        batch, N = observations.shape
+        rec_obs = rec_emission[observations.view(batch*N), :]
+        u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
+        u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
+        u = LinearChainCRF(u_scores, lengths=lengths)
+
+        argmax = u.argmax
         gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
@@ -80,7 +87,7 @@ def validate(iter):
 
 def trn(train_iter):   
     # opt = optim.SGD(model.parameters(), lr=0.1)
-    opt = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.5,) # weight_decay=0.1
+    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=3.0,) # weight_decay=0.1
     losses = []
     test_acc = []
     

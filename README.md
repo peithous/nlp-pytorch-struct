@@ -20,25 +20,37 @@ w/ more data
     - 3min on CPU with 100 sample batches
 
 #### 2. hmm-gradient-based(-sup): 
-`python hmm-grad.py` with "loss"
+`python hmm-grad.py` with "lik"
 - 0.2650 inacc on test sentences at 21 epochs, Adam: lr=0.01, weight_decay=0.2
 - 0.2621 inacc at 201, Adam: lr=0.001, weight_decay=0.2
     - no clip_grad_norm
     - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
 
 #### 3. hmm-grad-based-direct-max-marg-loglik(-unsup): 
-`python hmm-grad.py` with "loss1"
+`python hmm-grad.py` with "lik_u"
+
+1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7: 
+
 -  0.8604 inacc on test sentences at 61 epochs (if and when, very high variance)
     - Adam: lr=0.1, weight_decay=0.5
     - clip_grad_norm: 1.0
-    - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
+
 
 #### 4. hmm-grad-based-direct-max-marg-loglik-reconstruction: 
-`python hmm-reconstruct.py` 
-- inacc on test sentences at  epochs (very high variance)
-    - Adam: lr=0.01, weight_decay=0.5
-    - clip_grad_norm: 1.0
-    - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
+`python hmm-grad-rec.py` 
+
+1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7: 
+- eval on p(y| x, \hat x) argamx
+    - 0.7502 inacc on test at 81 epochs; Adam: lr=0.001, weight_decay=3.0,
+        - clip_grad_norm: 1.0
+
+
+- eval on z encoder.argmax 
+    - 0.7502 inacc on test at 71 epochs (high var); Adam: lr=0.01, weight_decay=0.5
+        - clip_grad_norm: 1.0
+
+
+- Ammar et al. compare models simlar resp to 4 and 9 here 
 
 #### 5. hmm-em-analytic(-unsup): 
 `python hmm-em.py` 
@@ -53,20 +65,37 @@ w/ more data
 >
 
 #### 7. linear-chain-CRF-1hot(-sup): 
+- 0.3666 at 31, Adam: lr=0.1, weight_decay=0.5,
+    - no clip_grad_norm
 
 #### 8. linear-chain-CRF-1hot-direct-max-marg-loglik(-unsup): 
+- 0.7778 at 21, 0.6258 at 51, Adam:  lr=0.1, weight_decay=0.5,
+    - clip_grad_norm: 1.0
 
 
 #### 9. linear-chain-CRF-1hot-direct-max-marg-loglik-reconstruction: 
+`python lincrd-rec.py` 
 
+1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7:
+- eval on 
+
+- eval on z
+    - 0.4986 inacc at 71; Adam: lr=0.001, weight_decay=3, 
+    - 0.7160 inacc on test sentences at 51 epochs (high variance); Adam: lr=0.01, weight_decay=2
+    - 0.5964 inacc at 41; Adam: lr=0.01, weight_decay=3,
+        - clip_grad_norm: 1.0
+
+- 
 
 #### 10. linear-chain-CRF-1hot-em-analytic-reconstruction: 
 
 
+- Zhang et al. Semi-sup
+
 
 ### bert pretrained embeddings:  
 
-#### 1. linear-chain-CRF-bert(-sup): 
+#### 11. linear-chain-CRF-bert(-sup): 
 `python bert-pos.py`  
 ?? rerun
 - 0.2203 inacc at 21 epochs on test sentences 
@@ -75,7 +104,7 @@ w/ more data
     - min_freq = 10, max_size=7
     - 28095.17342400551 secds for 52 eps
 
-#### 2. linear-chain-CRF-bert-direct-max-marg-loglik(-unsup): 
+#### 12. linear-chain-CRF-bert-direct-max-marg-loglik(-unsup): 
 `python bert-pos.py` with "loss1"
 ?? rerun
 - 0.8870 inacc at 31 epochs on test sentences
@@ -86,10 +115,10 @@ w/ more data
     - min_freq = 10, max_size=7
     - 27461.224514961243 for 52 eps
 
-#### 3. linear-chain-CRF-bert-direct-max-marg-loglik-reconstruction: 
+#### 13. linear-chain-CRF-bert-direct-max-marg-loglik-reconstruction: 
 
 
-#### 4. linear-chain-CRF-bert-em-analytic-reconstruction: 
+#### 14. linear-chain-CRF-bert-em-analytic-reconstruction: 
 
 
 > 
@@ -100,4 +129,4 @@ w/ more data
 ## Dependency prediction (parent given child)
 - to read in, use `from torch_struct.data import ConllXDataset'
 
-#### dep-CRF: 
+#### 15. dep-CRF: 

@@ -27,8 +27,8 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train, min_freq = 10) # min_freq = 10
-POS.build_vocab(train, min_freq = 10, max_size=7) # min_freq = 10, max_size=7
+WORD.build_vocab(train, min_freq = 5) # min_freq = 10
+POS.build_vocab(train, min_freq =7, max_size=5) # min_freq = 10, max_size=7
 
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle =False)
@@ -50,11 +50,14 @@ class Model(nn.Module):
     def forward(self, words):
         out = self.embedding(words) # (b x N) -> (b x N x V)
         final = self.linear(out) # (b x N x V) (V x C) -> (b x N x C)
+        # final = torch.einsum("bnh,ch->bnc", out, self.linear.weight) # (N x H) (H x C) -> N x C
         batch, N, C = final.shape
         vals = final.view(batch, N, C, 1)[:, 1:N] + self.transition.weight.view(1, 1, C, C) # -> (b x N-1 x C x C)      
         vals[:, 0, :, :] += final.view(batch, N, 1, C)[:, 0] # 1st tag prob
 
-        return vals, self.rec_emission.weight.transpose(0,1)
+        rec_emission_probs = F.log_softmax(self.rec_emission.weight.transpose(0,1), 0)
+
+        return vals, rec_emission_probs
 
 model = Model(V, C)
 
@@ -68,33 +71,30 @@ def validate(iter):
     model.eval()
     for i, batch in enumerate(iter):
         sents = batch.word.transpose(0,1)
-        label, lengths = batch.pos
+        label, lengths = batch.pos     
         
         scores, _ = model(sents)
 
         dist = LinearChainCRF(scores, lengths=lengths) 
         argmax = dist.argmax
-        gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
+
+        gold = LinearChainCRF.struct.to_parts(label.transpose(0,1)\
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
-        incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum() / 2.0
+        incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum()/2.0
         total += argmax.sum()        
-
-        # loss = dist.log_prob(gold).sum()
-        # # print(loss)
-        # losses.append(loss.detach()/label.shape[1])
 
     print(total, incorrect_edges)           
     model.train()    
     return incorrect_edges / total   
 
 def trn(train_iter):   
-   # opt = optim.SGD(model.parameters(), lr=0.1)
-    opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=0.5,  ) # weight_decay=0.1 
+    # opt = optim.SGD(model.parameters(), lr=0.1)
+    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=3.0,  ) # weight_decay=0.1 
     
     losses = []
     test_acc = []
-    for epoch in range(52):
+    for epoch in range(102):
         model.train()
         epoch_loss = []
         for i, ex in enumerate(train_iter):
@@ -112,17 +112,21 @@ def trn(train_iter):
 
             rec_obs = rec_emission[observations.view(batch*N), :]
 
-            print(dist.log_potentials.shape)
-            print(rec_obs.view(batch, N, C, 1)[:, 1:].shape)
+            # print(dist.log_potentials.shape)
+            # print(rec_obs.view(batch, N, C, 1)[:, 1:].shape)
 
             u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
+
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
             u = LinearChainCRF(u_scores, lengths=lengths).partition            
             
-            loss = -u + z
+            loss = -u + z  # -log lik 
             loss.sum().backward()
             # writer.add_scalar('loss', -loss, epoch)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+            # if i == 1:
+            #     print(rec_emission)
             opt.step()
 
             epoch_loss.append(loss.sum().detach()/label.shape[1])
