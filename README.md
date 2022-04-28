@@ -60,7 +60,7 @@ w/ more data
 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7:
 
 - convereges i.e. <img src="https://render.githubusercontent.com/render/math?math=loglik|_{\theta^{old}}-loglik|_{\theta^{old}}"> goes to 0 
-- 0.7920 inacc on test, at 100 epochs (passes over train data)
+- 0.7920 inacc on test, at convergence ~ 100 epochs (passes over train data)
 - high var, rand init might be better than converged test inacc
 
 
@@ -103,6 +103,9 @@ w/ more data
 
 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7:
 
+- eval on p(y| x, \hat x) argamx
+    -0.8623 at 55, lr=0.001, weight_decay=3.0,
+
 - Zhang et al. Semi-sup
 
 
@@ -133,7 +136,7 @@ w/ more data
     - 27461.224514961243 for 52 eps
 
 #### 13. linear-chain-CRF-bert-direct-max-marg-loglik-reconstruction: 
-
+- eval on p(y| x, \hat x) argamx
 
 #### 14. linear-chain-CRF-bert-em-analytic-reconstruction: 
 

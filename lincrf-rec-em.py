@@ -98,7 +98,7 @@ def validate(iter, rec_emission):
 
 def trn(train_iter):   
     # opt = optim.SGD(model.parameters(), lr=0.1)
-    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=4.0,  ) # weight_decay=0.1 
+    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=3.0,  ) # weight_decay=0.1 
     
     rec_emission = F.log_softmax(torch.rand((V, C), requires_grad=False), 0)
     # print('1', rec_emission.shape)
