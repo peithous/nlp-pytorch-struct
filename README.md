@@ -60,7 +60,7 @@ w/ more data
 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7:
 
 - convereges i.e. <img src="https://render.githubusercontent.com/render/math?math=loglik|_{\theta^{old}}-loglik|_{\theta^{old}}"> goes to 0 
-- 0.8557 inacc on test, at 100 epochs (passes over train data)
+- 0.7920 inacc on test, at 100 epochs (passes over train data)
 - high var, rand init might be better than converged test inacc
 
 
@@ -143,7 +143,17 @@ w/ more data
 
 >
 
+#### POS (N)CRF-AE References 
+- Ammar et al. 2014 https://arxiv.org/pdf/1411.1147.pdf
+- Zhang X. et al. 2017 "Semi-Supervised Structured Prediction with Neural CRF Autoencoder" https://www.cs.purdue.edu/homes/dgoldwas/papers/ZJPTG_EMNLP17.pdf
+
+
+
 ## Dependency prediction (parent given child)
 - to read in, use `from torch_struct.data import ConllXDataset'
 
 #### 15. dep-CRF: 
+
+
+
+####

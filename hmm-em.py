@@ -22,7 +22,7 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 WORD.build_vocab(train,  min_freq = 5,) #  min_freq = 5,
-POS.build_vocab(train,  max_size=7)
+POS.build_vocab(train, min_freq = 5, max_size=7)
 train_iter = BucketIterator(train, batch_size=2000, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=200, device=device, shuffle=False)
 C = len(POS.vocab)
@@ -42,6 +42,7 @@ class Model(nn.Module):
     def forward(self):
         transition_probs = F.log_softmax(self.transition.weight, dim=0)
         emission_probs = F.log_softmax(self.emission.weight.transpose(0,1), dim=0)
+        # print(emission_probs.shape)
         init_probs = F.log_softmax(self.init.weight.transpose(0,1), dim=0)
 
         return emission_probs, transition_probs, init_probs,\
@@ -95,7 +96,7 @@ def trn(iter):
             # div prob of getting to a state at t from each state at t-1 by prob of leaving each state at t-1
             # i.e. div each transition mat row by 1 x C vec corresponding to prob of leaving each prev state
             # b x C_{t-1} x C_t /  b x 1 x C_{t-1}
-            transition = pair_marg.sum(dim=-3).sum(dim=0)/pair_marg.sum(dim=-2).sum(dim=-2).unsqueeze(dim=1).sum(dim=0) #.log() # denom = sum_b sum_t^{N-1} xi_{t,j -> k}/sum_{l=1}^C sum_t^{N-1} xi_{t,j -> l}
+            transition = pair_marg.sum(dim=-3).sum(dim=0)/pair_marg.sum(-2).sum(-2).unsqueeze(1).sum(0) #.log() # denom = sum_b sum_t^{N-1} xi_{t,j -> k}/sum_{l=1}^C sum_t^{N-1} xi_{t,j -> l}
             assert torch.isclose(transition.sum(0, keepdim=True).sum(), \
                                     torch.tensor(C, dtype=torch.float)) # should be for x in C-{eos}, sum_C  p(c, x) = 1?
             transition = transition.log()
@@ -104,10 +105,11 @@ def trn(iter):
             assert torch.isclose(init.sum(), torch.tensor(1.))# \sum_C p_c = 1
             init = init.log()
 
-            gamma = torch.cat((init_marg.unsqueeze(dim=1), unary_marg), dim=1) # b x N x C
+            gamma = torch.cat((init_marg.unsqueeze(1), unary_marg), dim=1) # b x N x C
             v_x_n = one_hot[observations.view(batch*N), :].view(batch, N, V).transpose(1,2)
             #  V x N * N x C -> V x C; V x C/1 x C
-            emission = torch.matmul(v_x_n, gamma).sum(0)/(gamma.sum(dim=1).unsqueeze(dim=1)).sum(0) #.log()
+            # print(gamma.sum(1).sum(0).unsqueeze(dim=0).shape)
+            emission = torch.matmul(v_x_n, gamma).sum(0)/gamma.sum(1).sum(0).unsqueeze(0) #.log()
             assert torch.isclose(emission.sum(0, keepdim=True).sum(), \
                                     torch.tensor(C, dtype=torch.float)) # sum_V p(v | c) = 1
             emission = emission.log()
@@ -118,8 +120,8 @@ def trn(iter):
             diff = torch.abs(old -lik)
             print('diff', diff)
 
-            imprecision = validate(test_iter, emission, transition, init)
-            print(imprecision)
+            inacc = validate(test_iter, emission, transition, init)
+            print(inacc)
 
     return transition, emission, init, observations
 
