@@ -97,7 +97,7 @@ def validate(iter):
 
 def trn(train_iter):   
     # opt = optim.SGD(model.parameters(), lr=0.1)
-    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=5.0,  ) # weight_decay=0.1 
+    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=2.0,  ) # weight_decay=0.1 
     
     losses = []
     test_acc = []

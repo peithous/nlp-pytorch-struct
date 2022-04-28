@@ -30,8 +30,8 @@ print('total test sentences', len(test))
 WORD.build_vocab(train, min_freq = 5) # min_freq = 10
 POS.build_vocab(train, min_freq =5, max_size=7) # min_freq = 10, max_size=7
 
-train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
-test_iter = BucketIterator(test, batch_size=20, device=device, shuffle =False)
+train_iter = BucketIterator(train, batch_size=2000, device=device, shuffle=False)
+test_iter = BucketIterator(test, batch_size=200, device=device, shuffle =False)
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
@@ -45,7 +45,8 @@ class Model(nn.Module):
                 freeze=True) 
         self.linear = nn.Linear(voc_size, num_pos_tags) 
         self.transition = nn.Linear(num_pos_tags, num_pos_tags)
-        self.rec_emission = nn.Linear(voc_size, num_pos_tags) 
+        
+        # self.rec_emission = nn.Linear(voc_size, num_pos_tags) 
 
     def forward(self, words):
         out = self.embedding(words) # (b x N) -> (b x N x V)
@@ -55,56 +56,56 @@ class Model(nn.Module):
         vals = final.view(batch, N, C, 1)[:, 1:N] + self.transition.weight.view(1, 1, C, C) # -> (b x N-1 x C x C)      
         vals[:, 0, :, :] += final.view(batch, N, 1, C)[:, 0] # 1st tag prob
 
-        rec_emission_probs = F.log_softmax(self.rec_emission.weight.transpose(0,1), 0)
+        # rec_emission_probs = F.log_softmax(self.rec_emission.weight.transpose(0,1), 0)
 
-        return vals, self.embedding.weight, rec_emission_probs
+        return vals, self.embedding.weight #, rec_emission_probs
 
 model = Model(V, C)
 
 def show_chain(chain):
     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
-# def validate(iter):
-#     losses = []
-#     incorrect_edges = 0
-#     total = 0 
-#     model.eval()
-#     for i, batch in enumerate(iter):
-#         sents = torch.LongTensor(batch.word).transpose(0, 1).contiguous() 
-#         label, lengths = batch.pos     
+def validate(iter, rec_emission):
+    losses = []
+    incorrect_edges = 0
+    total = 0 
+    model.eval()
+    for i, batch in enumerate(iter):
+        sents = torch.LongTensor(batch.word).transpose(0, 1).contiguous() 
+        label, lengths = batch.pos     
         
-#         scores, _, _ = model(sents)
+        scores, _ = model(sents)
 
-#         dist = LinearChainCRF(scores, lengths=lengths) 
-#         # argmax = dist.argmax     
+        dist = LinearChainCRF(scores, lengths=lengths) 
+        # argmax = dist.argmax     
 
-#         batch, N = sents.shape
-#         rec_obs = rec_emission[sents.view(batch*N), :]
-#         u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
-#         u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
-#         u = LinearChainCRF(u_scores, lengths=lengths)
+        batch, N = sents.shape
+        rec_obs = rec_emission[sents.view(batch*N), :]
+        u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
+        u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
+        u = LinearChainCRF(u_scores, lengths=lengths)
 
-#         argmax = u.argmax
-#         gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
-#                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
+        argmax = u.argmax
+        gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
+                .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
-#         incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum()/2.0
-#         total += argmax.sum()  
+        incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum()/2.0
+        total += argmax.sum()  
 
-#     print(total, incorrect_edges)           
-#     model.train()    
-#     return incorrect_edges / total   
+    print(total, incorrect_edges)           
+    model.train()    
+    return incorrect_edges / total   
 
 def trn(train_iter):   
     # opt = optim.SGD(model.parameters(), lr=0.1)
-    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=5.0,  ) # weight_decay=0.1 
+    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=4.0,  ) # weight_decay=0.1 
     
-    # rec_emission = F.log_softmax(torch.rand((V, C), requires_grad=False), 0)
+    rec_emission = F.log_softmax(torch.rand((V, C), requires_grad=False), 0)
     # print('1', rec_emission.shape)
 
     losses = []
     test_acc = []
-    for epoch in range(2):
+    for epoch in range(100):
         print(epoch)
         model.train()
         epoch_loss = []
@@ -114,11 +115,11 @@ def trn(train_iter):
             batch, N = observations.shape
             _, lengths = ex.pos
            
-            scores, one_hot, rec_emission = model(observations)
+            scores, _ = model(observations)
             dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1})         
             z = dist.partition
 
-            rec_obs = rec_emission[observations.view(batch*N), :]
+            rec_obs = rec_emission[observations.view(batch*N), :] # b x N x C
 
             u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
@@ -126,18 +127,16 @@ def trn(train_iter):
             u = rec_dist.partition
 
             loss = -u + z  # -log lik 
-            loss.sum().backward()
+            loss.sum().backward(retain_graph=True)
             # writer.add_scalar('loss', -loss, epoch)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
 
-            scores2, _, _ = model(observations)
+            scores2, one_hot = model(observations)
             dist2 = LinearChainCRF(scores2, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1})         
 
-            # rec_obs2 = rec_obs
-
-            u_scores2 = dist2.log_potentials + rec_obs2.view(batch, N, C, 1)[:, 1:]
-            u_scores2[:, 0, :, :] +=  rec_obs2.view(batch, N, 1, C)[:, 0]
+            u_scores2 = dist2.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
+            u_scores2[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
             rec_dist2 = LinearChainCRF(u_scores2, lengths=lengths)            
 
             pair_marg = rec_dist2.marginals # xi's: (b x N-1 x C x C)
@@ -147,12 +146,13 @@ def trn(train_iter):
             gamma = torch.cat((init_marg.unsqueeze(dim=1), unary_marg), dim=1) # b x N x C
             v_x_n = one_hot[observations.view(batch*N), :].view(batch, N, V).transpose(1,2)
             #  V x N * N x C -> V x C; V x C/1 x C
-            emission = torch.matmul(v_x_n, gamma).sum(0)/(gamma.sum(dim=1).unsqueeze(dim=1)).sum(0) #.log()
+            emission = torch.matmul(v_x_n, gamma).sum(0)/gamma.sum(1).sum(0).unsqueeze(0) #.log()
+            # print(emission[:2])
             assert torch.isclose(emission.sum(0, keepdim=True).sum(), \
                                     torch.tensor(C, dtype=torch.float)) # sum_V p(v | c) = 1
-            rec_emission2 = emission.log()           
+            rec_emission = emission.log()           
 
-            rec_obs2 = rec_emission2[observations.view(batch*N), :]
+            # rec_obs2 = rec_emission2[observations.view(batch*N), :]
 
 
 
@@ -160,10 +160,10 @@ def trn(train_iter):
 
         losses.append(torch.tensor(epoch_loss).mean())
 
-        if epoch % 10 == 1:            
-            print(epoch, 'train-loss', losses[-1])
-            # imprecision = validate(test_iter)
-            # print(imprecision)
+        # if epoch % 10 == 1:            
+        print(epoch, 'train-loss', losses[-1])
+        imprecision = validate(test_iter, rec_emission)
+        print(imprecision)
             #test_acc.append(val_acc.item())
 
             # print('l', label.transpose(0, 1)) #labels         

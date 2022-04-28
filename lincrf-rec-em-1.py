@@ -67,6 +67,7 @@ def show_chain(chain):
 def validate(iter, rec_emission):
     incorrect_edges = 0
     total = 0 
+    total_gold = 0
     model.eval()
     for i, batch in enumerate(iter):
         sents = torch.LongTensor(batch.word).transpose(0, 1).contiguous() 
@@ -89,6 +90,8 @@ def validate(iter, rec_emission):
         
         incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum()/2.0
         total += argmax.sum()  
+        total_gold += gold.sum()
+        print('gold', total_gold)
 
     print(total, incorrect_edges)           
     model.train()    
@@ -140,7 +143,7 @@ def trn(train_iter):
             gamma = torch.cat((init_marg.unsqueeze(dim=1), unary_marg), dim=1) # b x N x C
             v_x_n = one_hot[observations.view(batch*N), :].view(batch, N, V).transpose(1,2)
             #  V x N * N x C -> V x C; V x C/1 x C
-            emission = torch.matmul(v_x_n, gamma).sum(0)/gamma.sum(1).sum(0).unsqueeze(dim=0) #.log()
+            emission = torch.matmul(v_x_n, gamma).sum(0)/(gamma.sum(dim=1).unsqueeze(dim=1)).sum(0) #.log()
             assert torch.isclose(emission.sum(0, keepdim=True).sum(), \
                                     torch.tensor(C, dtype=torch.float)) # sum_V p(v | c) = 1
             rec_emission = emission.log()           

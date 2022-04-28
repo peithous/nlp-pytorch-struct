@@ -85,7 +85,7 @@ def trn(iter):
             dist = HMM(transition, emission, init, observations, lengths=lengths)  # using theta^{old}
             old = dist.partition.sum() 
 
-            print(old)
+            # print(old)
 
 # E: marginals of posterior p(latent_vars|obs)
             pair_marg = dist.marginals # xi's: (b x N-1 x C x C)
@@ -96,7 +96,7 @@ def trn(iter):
             # div prob of getting to a state at t from each state at t-1 by prob of leaving each state at t-1
             # i.e. div each transition mat row by 1 x C vec corresponding to prob of leaving each prev state
             # b x C_{t-1} x C_t /  b x 1 x C_{t-1}
-            transition = pair_marg.sum(dim=-3).sum(dim=0)/pair_marg.sum(-2).sum(-2).unsqueeze(1).sum(0) #.log() # denom = sum_b sum_t^{N-1} xi_{t,j -> k}/sum_{l=1}^C sum_t^{N-1} xi_{t,j -> l}
+            transition = pair_marg.sum(dim=-3).sum(dim=0)/pair_marg.sum(-2).sum(-2).sum(0).unsqueeze(0) #.log() # denom = sum_b sum_t^{N-1} xi_{t,j -> k}/sum_{l=1}^C sum_t^{N-1} xi_{t,j -> l}
             assert torch.isclose(transition.sum(0, keepdim=True).sum(), \
                                     torch.tensor(C, dtype=torch.float)) # should be for x in C-{eos}, sum_C  p(c, x) = 1?
             transition = transition.log()
@@ -108,8 +108,8 @@ def trn(iter):
             gamma = torch.cat((init_marg.unsqueeze(1), unary_marg), dim=1) # b x N x C
             v_x_n = one_hot[observations.view(batch*N), :].view(batch, N, V).transpose(1,2)
             #  V x N * N x C -> V x C; V x C/1 x C
-            # print(gamma.sum(1).sum(0).unsqueeze(dim=0).shape)
             emission = torch.matmul(v_x_n, gamma).sum(0)/gamma.sum(1).sum(0).unsqueeze(0) #.log()
+            # print(emission[:5])
             assert torch.isclose(emission.sum(0, keepdim=True).sum(), \
                                     torch.tensor(C, dtype=torch.float)) # sum_V p(v | c) = 1
             emission = emission.log()
