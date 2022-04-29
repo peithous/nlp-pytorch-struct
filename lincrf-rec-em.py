@@ -150,10 +150,8 @@ def trn(train_iter):
             # print(emission[:2])
             assert torch.isclose(emission.sum(0, keepdim=True).sum(), \
                                     torch.tensor(C, dtype=torch.float)) # sum_V p(v | c) = 1
+            # reshape emission[emission==0] += 1e-9 #renomalize
             rec_emission = emission.log()           
-
-            # rec_obs2 = rec_emission2[observations.view(batch*N), :]
-
 
 
             epoch_loss.append(loss.sum().detach()/batch)

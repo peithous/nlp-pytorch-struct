@@ -1,4 +1,5 @@
 import time
+import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
@@ -30,7 +31,10 @@ test_iter = BucketIterator(test, batch_size=20, device=device, shuffle=False)
 
 C = len(POS.vocab)
 V = len(WORD.vocab)
-# print(C, V)
+print(C, V)
+# print(vars(POS.vocab))
+print(POS.vocab.itos)
+# POS.vocab.itos # for plot
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
@@ -47,6 +51,9 @@ class Model(nn.Module):
         return emission_probs, transition_probs, init_probs
 
 model = Model(V, C)
+
+# def show_chain(chain):
+#     plt.imshow(chain.detach()) #.sum(-1).transpose(0, 1)
 
 def validate(iter):
     incorrect_edges=0
@@ -67,15 +74,15 @@ def validate(iter):
         total += argmax.sum()        
     print(total, incorrect_edges)           
     model.train()    
-    return incorrect_edges / total   
+    return incorrect_edges/total   
 
 def trn(train_iter):   
-    opt = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.3, ) # weight_decay=0.1
+    opt = optim.Adam(model.parameters(), lr=0.01, weight_decay=0.2, ) # weight_decay=0.1
     # opt = optim.SGD(model.parameters(), lr=0.1)
 
     losses = []
     # test_acc = []
-    for epoch in range(302):
+    for epoch in range(2):
         model.train()
         batch_lik = []
         for i, ex in enumerate(train_iter):
@@ -114,16 +121,46 @@ def trn(train_iter):
             #test_acc.append(val_acc.item())
 
             # print('l', label.transpose(0, 1)) #labels         
-            # show_chain(dist.argmax[0])
-            # plt.show()
-
             # writer.add_scalar('val_loss', val_loss, epoch)      
 
     # plt.plot(losses)
     # plt.plot(test_acc)
 
+    # print(transition.shape)
+    # show_chain(transition)
+    # plt.show()   
+
+    tag_names = POS.vocab.itos
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(transition.detach())
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(len(tag_names)))
+    ax.set_yticks(np.arange(len(tag_names)))
+    # ... and label them with the respective list entries
+    ax.set_xticklabels(tag_names)
+    ax.set_yticklabels(tag_names)
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+    rotation_mode="anchor")
+
+    # Loop over data dimensions and create text annotations.
+    for i in range(len(tag_names)):
+        for j in range(len(tag_names)):
+            text = ax.text(j, i, str( np.exp(transition.detach()[i, j].item()) )[:5],
+                       ha="center", va="center", color="w")
+
+    ax.set_title("HMM Transition Matrix")
+    ax.xaxis.tick_top()
+    ax.xaxis.set_label_position('top')
+    plt.xlabel("$C|_{t-1}$")
+    plt.ylabel("$C|_{t}$")
+    fig.tight_layout()
+    plt.show()
+
+
 trn(train_iter)
 
 print("--- %s seconds ---" % (time.time() - start_time))
-
 

@@ -77,10 +77,6 @@ def validate(iter):
         incorrect_edges += (argmax.sum(-1) - gold.sum(-1)).abs().sum()/2.0
         total += argmax.sum()        
 
-        # loss = dist.log_prob(gold).sum()
-        # # print(loss)
-        # losses.append(loss.detach()/label.shape[1])
-
     print(total, incorrect_edges)           
     model.train()    
     return incorrect_edges / total   

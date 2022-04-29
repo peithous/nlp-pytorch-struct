@@ -30,7 +30,7 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 UD_TAG.build_vocab(train.udtag, min_freq = 5, max_size=7)
 
 #train_iter = torch_struct.data.TokenBucket(train, 20, device="cpu")
-train_iter = torchtext.data.BucketIterator(train, batch_size=200, device="cpu", shuffle=False)
+train_iter = torchtext.data.BucketIterator(train, batch_size=20, device="cpu", shuffle=False)
 val_iter = torchtext.data.BucketIterator(test, batch_size=20, device="cpu", shuffle=False)
 
 C = len(UD_TAG.vocab)
@@ -97,8 +97,10 @@ def validate(iter):
     
 def train(train_iter, val_iter, model):
     opt = AdamW(model.parameters(), lr=1e-4, eps=1e-8)
-    scheduler = WarmupLinearSchedule(opt, warmup_steps=20, t_total=2500) #t_total=2500
+    # scheduler = WarmupLinearSchedule(opt, warmup_steps=20, t_total=2500) #t_total=2500
 
+
+    for epoch in range(52):
     model.train()
     losses = []
 
@@ -136,7 +138,7 @@ def train(train_iter, val_iter, model):
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
-        scheduler.step()
+        # scheduler.step()
 
         losses.append(loss.detach())
        
