@@ -82,7 +82,7 @@ def trn(train_iter):
 
     losses = []
     # test_acc = []
-    for epoch in range(2):
+    for epoch in range(81):
         model.train()
         batch_lik = []
         for i, ex in enumerate(train_iter):
@@ -148,10 +148,10 @@ def trn(train_iter):
     # Loop over data dimensions and create text annotations.
     for i in range(len(tag_names)):
         for j in range(len(tag_names)):
-            text = ax.text(j, i, str( np.exp(transition.detach()[i, j].item()) )[:5],
+            text = ax.text(j, i, str( np.exp(transition.detach()[i, j].item()) )[:6],
                        ha="center", va="center", color="w")
 
-    ax.set_title("HMM Transition Matrix")
+    ax.set_title("HMM Transition Probs: Rec Direct Marg Lik")
     ax.xaxis.tick_top()
     ax.xaxis.set_label_position('top')
     plt.xlabel("$C|_{t-1}$")

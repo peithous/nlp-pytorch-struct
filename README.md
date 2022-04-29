@@ -37,7 +37,7 @@ w/ more data
 
 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7: 
 
-- 0.8604 inacc on test sentences at 61 epochs (if and when, very high variance), Adam: lr=0.1, weight_decay=0.5
+- 0.7569 inacc on test sentences at 31 epochs (if and when, very high variance), Adam: lr=0.1, weight_decay=0.5
     - clip_grad_norm: 1.0
 
 #### 4. hmm-grad-based-direct-max-marg-loglik-reconstruction: 
@@ -46,7 +46,7 @@ w/ more data
 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7: 
 
 - eval on p(y| x, \hat x) argamx
-    - 0.7502 inacc on test at 81 epochs; Adam: lr=0.001, weight_decay=3.0,
+    - 0.6781 inacc on test at 61 epochs; Adam: lr=0.001, weight_decay=3.0,
         - clip_grad_norm: 1.0
 
 - eval on z encoder.argmax 
@@ -98,6 +98,9 @@ w/ more data
     - 0.7160 inacc on test sentences at 51 epochs (high variance), Adam: lr=0.01, weight_decay=2
     - 0.5964 inacc at 41, Adam: lr=0.01, weight_decay=3,
         - clip_grad_norm: 1.0
+
+#### 9'. linear-chain-CRF-1hot-direct-max-marg-loglik-reconstruction-viterbi: 
+
 
 #### 10. linear-chain-CRF-1hot-em-analytic-reconstruction: 
 

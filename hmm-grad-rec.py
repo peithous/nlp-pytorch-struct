@@ -1,4 +1,5 @@
 import time
+import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 import torchtext.data as data
 from torchtext.data import BucketIterator
@@ -87,7 +88,7 @@ def trn(train_iter):
     losses = []
     test_acc = []
     
-    for epoch in range(102):
+    for epoch in range(61):
         model.train()
         epoch_loss = []
         for i, ex in enumerate(train_iter):
@@ -132,6 +133,34 @@ def trn(train_iter):
 
     # plt.plot(losses)
     # plt.plot(test_acc)
+    tag_names = POS.vocab.itos
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(transition.detach())
+    # We want to show all ticks...
+    ax.set_xticks(np.arange(len(tag_names)))
+    ax.set_yticks(np.arange(len(tag_names)))
+    # ... and label them with the respective list entries
+    ax.set_xticklabels(tag_names)
+    ax.set_yticklabels(tag_names)
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+    rotation_mode="anchor")
+
+    # Loop over data dimensions and create text annotations.
+    for i in range(len(tag_names)):
+        for j in range(len(tag_names)):
+            text = ax.text(j, i, str( np.exp(transition.detach()[i, j].item()) )[:6],
+                       ha="center", va="center", color="w")
+
+    ax.set_title("HMM Transition Probs: Rec Direct Marg Lik")
+    ax.xaxis.tick_top()
+    ax.xaxis.set_label_position('top')
+    plt.xlabel("$C|_{t-1}$")
+    plt.ylabel("$C|_{t}$")
+    fig.tight_layout()
+    plt.show()
 
 trn(train_iter)
 
