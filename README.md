@@ -15,11 +15,13 @@ wsj data splits from: `git clone -q http://github.com/srush/temp`
 `python hmm-mle.py`  
 
 - 0.1614 inacc on test sentences 
-    - 1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7
+    - 1174 train sentences, 45 held out test sentences
+    - min_freq = 5, max_size=7
     - 174 secds CPU
 >
 w/ more data
-- 93.9% accurate on test sentences (38992 train sentences, 2416 held out test sentences)  
+- 93.9% accurate on test sentences 
+    - 38992 train sentences, 2416 held out test sentences
     - w/out hidden state space restriction 
     - 3min on CPU with 100 sample batches
 
@@ -87,11 +89,11 @@ w/ more data
 #### 9. linear-chain-CRF-1hot-direct-max-marg-loglik-reconstruction: 
 `python lincrf-rec.py` 
 
-1174 train sentences, 45 held out test sentences; min_freq = 5, max_size=7:
+1174 train sentences, 45 held out test sentences;  min_freq = 7, max_size=5:
 
 - eval on p(y| x, \hat x) argamx
     - 0.5109 inacc at 131, Adam: lr=0.001, weight_decay=5.0
-        - clip_grad_norm: 1.0
+    - clip_grad_norm: 1.0
 
 - eval on z.argmax
     - 0.4986 inacc at 71, Adam: lr=0.001, weight_decay=3, 
@@ -111,7 +113,6 @@ w/ more data
 
 - Zhang et al. Semi-sup
 
-
 ### bert pretrained embeddings:  
 
 #### 11. linear-chain-CRF-bert(-sup): 
@@ -120,8 +121,7 @@ w/ more data
 1174 train sentences, 45 held out test sentences: 
 
 ?? rerun
-- 0.2203 inacc at 21 epochs on test sentences 
-    - 
+- eval 0.2203 inacc at 21 epochs on test sentences 
     - starts overfitting at 31 eps
     - min_freq = 10, max_size=7
     - 28095.17342400551 secds for 52 eps

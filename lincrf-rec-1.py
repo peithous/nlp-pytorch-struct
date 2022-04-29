@@ -1,6 +1,4 @@
 import time
-import numpy as np
-from itertools import chain
 from torch.utils.tensorboard import SummaryWriter
 # from torchtext.legacy import data
 import torchtext.data as data
@@ -29,15 +27,15 @@ test = ConllXDatasetPOS('data/wsj.test0.conllx', fields)
 print('total train sentences', len(train))
 print('total test sentences', len(test))
 
-WORD.build_vocab(train, min_freq=5) # min_freq = 10
-POS.build_vocab(train, min_freq=5, max_size=7) # min_freq = 10, max_size=7
+WORD.build_vocab(train, min_freq=10) # min_freq = 10
+POS.build_vocab(train, min_freq=10, max_size=5) # min_freq = 10, max_size=7
 
 train_iter = BucketIterator(train, batch_size=20, device=device, shuffle=False)
 test_iter = BucketIterator(test, batch_size=20, device=device, shuffle =False)
 
 C = len(POS.vocab.itos)
 V = len(WORD.vocab.itos)
-print(C)
+# print(C)
 
 class Model(nn.Module):
     def __init__(self, voc_size, num_pos_tags):
@@ -63,10 +61,11 @@ class Model(nn.Module):
 
 model = Model(V, C)
 
-# def show_chain(chain):
-#     plt.imshow(chain.detach().sum(-1).transpose(0, 1))
+def show_chain(chain):
+    plt.imshow(chain.detach().sum(-1).transpose(0, 1))
 
 def validate(iter):
+    losses = []
     incorrect_edges = 0
     total = 0 
     model.eval()
@@ -86,7 +85,6 @@ def validate(iter):
         u = LinearChainCRF(u_scores, lengths=lengths)
 
         argmax = u.argmax
-        # print(argmax.shape)
         gold = LinearChainCRF.struct.to_parts(label.transpose(0, 1)\
                 .type(torch.LongTensor), C, lengths=lengths).type(torch.FloatTensor) # b x N x C -> b x (N-1) x C x C  
         
@@ -99,47 +97,42 @@ def validate(iter):
 
 def trn(train_iter):   
     # opt = optim.SGD(model.parameters(), lr=0.1)
-    opt = optim.Adam(model.parameters(), lr=0.1, weight_decay=5.0,  ) # weight_decay=0.1 
+    opt = optim.Adam(model.parameters(), lr=0.01, weight_decay=5.0,  ) # weight_decay=0.1 
     
     losses = []
     test_acc = []
-    for epoch in range(162):
+    for epoch in range(202):
         model.train()
         epoch_loss = []
         for i, ex in enumerate(train_iter):
             opt.zero_grad()      
             observations = torch.LongTensor(ex.word).transpose(0,1).contiguous()            
-            batch, N = observations.shape
+
             label, lengths = ex.pos
            
             scores, rec_emission = model(observations)
-            dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1})    
+            dist = LinearChainCRF(scores, lengths=lengths) # f(y) = \prod_{n=1}^N \phi(n, y_n, y_n{-1}) 
+        
+# direct max of log marginal lik 
             z = dist.partition
+            batch, N = observations.shape
 
             rec_obs = rec_emission[observations.view(batch*N), :]
-            # print('1', rec_emission.shape)
+
             u_scores = dist.log_potentials + rec_obs.view(batch, N, C, 1)[:, 1:]
             u_scores[:, 0, :, :] +=  rec_obs.view(batch, N, 1, C)[:, 0]
-            rec_dist = LinearChainCRF(u_scores, lengths=lengths)
-            u = rec_dist.partition            
+            u = LinearChainCRF(u_scores, lengths=lengths).partition            
             
             loss = -u + z  # -log lik 
-# 1. direct max of log marginal lik 
             loss.sum().backward()
-
-# 2. Viterbi Objective
-            # loss1 = rec_dist.log_prob(rec_dist.argmax)
-            # (-loss1).sum().backward()
-
             # writer.add_scalar('loss', -loss, epoch)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
 
-            # print(z.sum())
-
-            epoch_loss.append(loss.sum().detach()/batch)
+            epoch_loss.append(loss.sum().detach()/label.shape[1])
 
         losses.append(torch.tensor(epoch_loss).mean())
+
 
         if epoch % 10 == 1:            
             print(epoch, 'train-loss', losses[-1])
@@ -156,77 +149,6 @@ def trn(train_iter):
     # plt.plot(losses)
     # plt.plot(test_acc)
 
-        # print(rec_dist.argmax.shape)
-
-# Plots!
-            tag_names = POS.vocab.itos
-
-            sent = observations[0]
-            sent_lab = label.transpose(0,1)[0]
-            # print(sent_lab)
-
-            # print(' '.join([WORD.vocab.itos[i] for i in sent[: lengths[0]]]))
-            sent_words = [WORD.vocab.itos[i] for i in sent[: lengths[0]]][1:]
-            sent_lab = [POS.vocab.itos[i] for i in sent_lab[: lengths[0]]][1:]
-            words_labs = list(zip(sent_words, sent_lab))
-
-        ####
-            fig, ax = plt.subplots()
-            im = ax.imshow(rec_dist.argmax[0].detach().sum(-1).transpose(0, 1)[:, :lengths[0]-1])
-            # We want to show all ticks...
-            ax.set_xticks(np.arange(len(words_labs)))
-            ax.set_yticks(np.arange(len(tag_names)))
-            # # ... and label them with the respective list entries
-            ax.set_xticklabels(words_labs)
-            ax.set_yticklabels(tag_names)
-
-            # # Rotate the tick labels and set their alignment.
-            plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-            rotation_mode="anchor")
-
-            # Loop over data dimensions and create text annotations.
-            # for i in range(len(tag_names)):
-            #     for j in range(len(sent_words)-1):
-            #         text = ax.text(j, i, rec_dist.argmax[0].detach().sum(-1).transpose(0, 1)[:, :lengths[0]-1],
-            #                    ha="center", va="center", color="w")
-
-            ax.set_title("Argmax: Rec Direct Marg Lik")
-            # # ax.xaxis.tick_top()
-            # # ax.xaxis.set_label_position('top')
-            plt.xlabel("observed  sequence and true POS")
-            plt.ylabel("predicted POS")
-            fig.tight_layout()
-            plt.show()
-
-        #### 
-            fig, ax = plt.subplots()
-            im = ax.imshow(rec_dist.marginals[0].detach().sum(-3))
-            # We want to show all ticks...
-            ax.set_xticks(np.arange(len(tag_names)))
-            ax.set_yticks(np.arange(len(tag_names)))
-            # ... and label them with the respective list entries
-            ax.set_xticklabels(tag_names)
-            ax.set_yticklabels(tag_names)
-
-            # Rotate the tick labels and set their alignment.
-            plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-            rotation_mode="anchor")
-
-            # Loop over data dimensions and create text annotations.
-            for i in range(len(tag_names)):
-                for j in range(len(tag_names)):
-                    text = ax.text(j, i, str(np.exp(rec_dist.marginals[0].detach().sum(-3)[i, j].item())/rec_dist.marginals[0].detach().shape[0] )[:6],
-                            ha="center", va="center", color="w")
-
-            ax.set_title("Linear Chain CRF Marginals: Rec Direct Marg Lik")
-            ax.xaxis.tick_top()
-            ax.xaxis.set_label_position('top')
-            plt.xlabel("$C|_{t-1}$")
-            plt.ylabel("$C|_{t}$")
-            fig.tight_layout()
-            plt.show()
-
 trn(train_iter)
 
 print("--- %s seconds ---" % (time.time() - start_time))
-
