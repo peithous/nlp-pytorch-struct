@@ -89,8 +89,8 @@ w/ more data
 #### 9. linear-chain-CRF-1hot-direct-max-marg-loglik-reconstruction: 
 `python lincrf-rec.py` 
 
-1174 train sentences, 45 held out test sentences;  min_freq = 7, max_size=5:
-
+1174 train sentences, 45 held out test sentences; !min_freq=7, max_size=5:
+- ?min_freq=10, max_size=5
 - eval on p(y| x, \hat x) argamx
     - 0.5109 inacc at 131, Adam: lr=0.001, weight_decay=5.0
     - clip_grad_norm: 1.0

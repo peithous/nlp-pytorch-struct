@@ -103,7 +103,7 @@ def trn(train_iter):
     
     losses = []
     test_acc = []
-    for epoch in range(162):
+    for epoch in range(22):
         model.train()
         epoch_loss = []
         for i, ex in enumerate(train_iter):
@@ -138,6 +138,8 @@ def trn(train_iter):
             # print(z.sum())
 
             epoch_loss.append(loss.sum().detach()/batch)
+            # print(dist.marginals[0][0].sum())
+            # print(rec_dist.marginals[0][0].sum(-1))
 
         losses.append(torch.tensor(epoch_loss).mean())
 
@@ -161,64 +163,64 @@ def trn(train_iter):
 # Plots!
             tag_names = POS.vocab.itos
 
-            sent = observations[0]
-            sent_lab = label.transpose(0,1)[0]
-            # print(sent_lab)
+        # sent = observations[0]
+        # sent_lab = label.transpose(0,1)[0]
+        # # print(sent_lab)
 
-            # print(' '.join([WORD.vocab.itos[i] for i in sent[: lengths[0]]]))
-            sent_words = [WORD.vocab.itos[i] for i in sent[: lengths[0]]][1:]
-            sent_lab = [POS.vocab.itos[i] for i in sent_lab[: lengths[0]]][1:]
-            words_labs = list(zip(sent_words, sent_lab))
+        #     # print(' '.join([WORD.vocab.itos[i] for i in sent[: lengths[0]]]))
+        # sent_words = [WORD.vocab.itos[i] for i in sent[: lengths[0]]][1:]
+        # sent_lab = [POS.vocab.itos[i] for i in sent_lab[: lengths[0]]][1:]
+        # words_labs = list(zip(sent_words, sent_lab))
 
-        ####
-            fig, ax = plt.subplots()
-            im = ax.imshow(rec_dist.argmax[0].detach().sum(-1).transpose(0, 1)[:, :lengths[0]-1])
-            # We want to show all ticks...
-            ax.set_xticks(np.arange(len(words_labs)))
-            ax.set_yticks(np.arange(len(tag_names)))
-            # # ... and label them with the respective list entries
-            ax.set_xticklabels(words_labs)
-            ax.set_yticklabels(tag_names)
+        # ####
+        # fig, ax = plt.subplots()
+        # im = ax.imshow(rec_dist.argmax[0].detach().sum(-1).transpose(0, 1)[:, :lengths[0]-1])
+        #     # We want to show all ticks...
+        # ax.set_xticks(np.arange(len(words_labs)))
+        # ax.set_yticks(np.arange(len(tag_names)))
+        #     # # ... and label them with the respective list entries
+        # ax.set_xticklabels(words_labs)
+        # ax.set_yticklabels(tag_names)
 
-            # # Rotate the tick labels and set their alignment.
-            plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-            rotation_mode="anchor")
+        #     # # Rotate the tick labels and set their alignment.
+        # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+        # rotation_mode="anchor")
 
-            # Loop over data dimensions and create text annotations.
-            # for i in range(len(tag_names)):
-            #     for j in range(len(sent_words)-1):
-            #         text = ax.text(j, i, rec_dist.argmax[0].detach().sum(-1).transpose(0, 1)[:, :lengths[0]-1],
-            #                    ha="center", va="center", color="w")
+        #     # Loop over data dimensions and create text annotations.
+        #     # for i in range(len(tag_names)):
+        #     #     for j in range(len(sent_words)-1):
+        #     #         text = ax.text(j, i, rec_dist.argmax[0].detach().sum(-1).transpose(0, 1)[:, :lengths[0]-1],
+        #     #                    ha="center", va="center", color="w")
 
-            ax.set_title("Argmax: Rec Direct Marg Lik")
-            # # ax.xaxis.tick_top()
-            # # ax.xaxis.set_label_position('top')
-            plt.xlabel("observed  sequence and true POS")
-            plt.ylabel("predicted POS")
-            fig.tight_layout()
-            plt.show()
+        # ax.set_title("Argmax: Rec Direct Marg Lik")
+        #     # # ax.xaxis.tick_top()
+        #     # # ax.xaxis.set_label_position('top')
+        # plt.xlabel("observed  sequence and true POS")
+        # plt.ylabel("predicted POS")
+        # fig.tight_layout()
+        # plt.show()
 
         #### 
             fig, ax = plt.subplots()
-            im = ax.imshow(rec_dist.marginals[0].detach().sum(-3))
-            # We want to show all ticks...
+            im = ax.imshow(rec_dist.marginals[0][0].detach() )
+                # We want to show all ticks...
             ax.set_xticks(np.arange(len(tag_names)))
             ax.set_yticks(np.arange(len(tag_names)))
-            # ... and label them with the respective list entries
+                # ... and label them with the respective list entries
             ax.set_xticklabels(tag_names)
             ax.set_yticklabels(tag_names)
 
-            # Rotate the tick labels and set their alignment.
+                # Rotate the tick labels and set their alignment.
             plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
             rotation_mode="anchor")
 
-            # Loop over data dimensions and create text annotations.
+                # Loop over data dimensions and create text annotations.
             for i in range(len(tag_names)):
                 for j in range(len(tag_names)):
-                    text = ax.text(j, i, str(np.exp(rec_dist.marginals[0].detach().sum(-3)[i, j].item())/rec_dist.marginals[0].detach().shape[0] )[:6],
-                            ha="center", va="center", color="w")
+                    text = ax.text(j, i, str(rec_dist.marginals.detach()[0][0][i, j].item() )[:6],
+                                ha="center", va="center", color="w")
 
-            ax.set_title("Linear Chain CRF Marginals: Rec Direct Marg Lik")
+            ax.set_title("Linear Chain CRF Marginals (t=1): Rec Direct Marg Lik")
             ax.xaxis.tick_top()
             ax.xaxis.set_label_position('top')
             plt.xlabel("$C|_{t-1}$")
